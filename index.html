@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Live AI Assistant</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      touch-action: manipulation;
+      -webkit-text-size-adjust: 100%;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+      width: 100%;
+      height: 100%;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #121212;
+      color: #ffffff;
+      margin: 0;
+      padding: 15px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h2 { margin-top: 5px; margin-bottom: 15px; color: #4dabf7; font-size: 22px; }
+    #videoContainer {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      background: #000;
+      aspect-ratio: 4/3;
+    }
+    video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .controls {
+      width: 100%;
+      max-width: 480px;
+      margin: 15px auto;
+      padding: 12px;
+      background: #1e1e1e;
+      border-radius: 10px;
+    }
+    /* Input and Button Rows */
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    input, button, select {
+      padding: 12px;
+      font-size: 15px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      touch-action: manipulation;
+    }
+    input, select { background: #2a2a2a; color: #fff; flex: 1; }
+    button {
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .flex-1 { flex: 1; }
+    .btn-logs { background-color: #495057; color: white; width: 90px; }
+    .btn-logs:hover { background-color: #6c757d; }
+    
+    /* Start, Stop & Timer Side-By-Side */
+    #startBtn { background-color: #2b8a3e; color: white; }
+    #startBtn:hover { background-color: #2f9e44; }
+    #stopBtn { background-color: #c92a2a; color: white; }
+    #stopBtn:hover { background-color: #e03131; }
+    button:disabled, input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Live Time Counter Badge */
+    .timer-badge {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 16px;
+      font-weight: bold;
+      color: #ffeb3b;
+      min-width: 65px;
+      text-align: center;
+    }
+
+    /* Chat Input Box Row */
+    .chat-box { display: flex; gap: 8px; margin-top: 10px; }
+    .chat-box input { margin: 0; }
+    .chat-box button {
+      width: 75px;
+      background-color: #1c7ed6;
+      color: white;
+    }
+
+    /* Mic Meter */
+    .meter-container {
+      margin-top: 8px;
+      text-align: left;
+    }
+    .meter-label {
+      font-size: 12px;
+      color: #aaa;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .meter-bg {
+      background: #2a2a2a;
+      height: 10px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #444;
+    }
+    #micMeter {
+      background: #00ff66;
+      height: 100%;
+      width: 0%;
+      transition: width 0.05s linear;
+    }
+    #status {
+      font-weight: bold;
+      color: #ffd43b;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    /* Developer Footer Tag */
+    .footer {
+      margin-top: 15px;
+      font-size: 13px;
+      color: #888;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+
+    /* Debug Logs Overlay Panel */
+    #logPanel {
+      display: none;
+      background: #000;
+      color: #00ff66;
+      text-align: left;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 11px;
+      height: 130px;
+      overflow-y: auto;
+      width: 100%;
+      max-width: 480px;
+      margin: 10px auto;
+      border-radius: 8px;
+      border: 1px solid #333;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Live AI Assistant</h2>
+
+  <div id="videoContainer">
+    <video id="webcam" autoplay playsinline muted></video>
+  </div>
+
+  <div class="controls">
+    <!-- Media Source Selector (Camera or Screen Share) -->
+    <div class="row">
+      <select id="mediaSource">
+        <option value="camera">📷 Rear Camera</option>
+        <option value="screen">🖥️ Screen Share</option>
+      </select>
+    </div>
+
+    <!-- Start, Stop & Live Timer Row -->
+    <div class="row">
+      <button id="startBtn" class="flex-1">▶ Start Live</button>
+      <button id="stopBtn" class="flex-1" disabled>⏹ Stop</button>
+      <div id="timerDisplay" class="timer-badge">00:00</div>
+    </div>
+
+    <!-- Chat Message Input Box -->
+    <div class="chat-box">
+      <input type="text" id="userMsg" placeholder="Type a message or question..." disabled>
+      <button id="sendBtn" disabled>Send</button>
+    </div>
+
+    <!-- Microphone Meter -->
+    <div class="meter-container">
+      <div class="meter-label">
+        <span>Mic Meter:</span>
+        <span id="micMeterValue">Silent</span>
+      </div>
+      <div class="meter-bg">
+        <div id="micMeter"></div>
+      </div>
+    </div>
+
+    <div id="status">Status: Disconnected</div>
+
+    <!-- API Key + Log Toggle Button Row -->
+    <div class="row" style="margin-top: 15px; margin-bottom: 0;">
+      <input type="password" id="apiKey" placeholder="Paste API Key Here">
+      <button id="toggleLogsBtn" class="btn-logs">📜 Logs</button>
+    </div>
+  </div>
+
+  <!-- Developer Footer -->
+  <div class="footer">Developed by ROCKY</div>
+
+  <!-- Debug Logs Panel (Hidden by default) -->
+  <div id="logPanel">Logs initialized...</div>
+
+  <script>
+    const MODEL_NAME = "models/gemini-3.1-flash-live-preview";
+    
+    let ws = null;
+    let videoStream = null;
+    let audioStream = null;
+    let video = document.getElementById("webcam");
+    let imageInterval = null;
+    let micAudioContext = null;
+    let playAudioContext = null;
+    let nextStartTime = 0;
+    let isUserStopping = false;
+
+    // Timer Variables
+    let sessionTimer = null;
+    let timerStartTime = 0;
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    function log(msg) {
+      const logDiv = document.getElementById("logPanel");
+      logDiv.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(msg);
+    }
+
+    function startTimer() {
+      if (sessionTimer) clearInterval(sessionTimer);
+      timerStartTime = Date.now();
+      sessionTimer = setInterval(updateTimerDisplay, 1000);
+    }
+
+    function updateTimerDisplay() {
+      const elapsedSec = Math.floor((Date.now() - timerStartTime) / 1000);
+      const mins = String(Math.floor(elapsedSec / 60)).padStart(2, "0");
+      const secs = String(elapsedSec % 60).padStart(2, "0");
+      document.getElementById("timerDisplay").innerText = `${mins}:${secs}`;
+    }
+
+    function stopTimer() {
+      if (sessionTimer) {
+        clearInterval(sessionTimer);
+        sessionTimer = null;
+      }
+      document.getElementById("timerDisplay").innerText = "00:00";
+    }
+
+    // Lock Portrait Orientation on mobile screens if supported
+    function lockPortrait() {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock("portrait").catch(() => {});
+      }
+    }
+
+    // Toggle Technical Debug Logs Panel
+    document.getElementById("toggleLogsBtn").onclick = () => {
+      const logPanel = document.getElementById("logPanel");
+      if (logPanel.style.display === "block") {
+        logPanel.style.display = "none";
+      } else {
+        logPanel.style.display = "block";
+      }
+    };
+
+    // Live Mid-Session Media Source Switcher Handler
+    document.getElementById("mediaSource").onchange = async (e) => {
+      const newSource = e.target.value;
+      if (ws && ws.readyState !== WebSocket.CLOSED) {
+        log(`Switching video feed to ${newSource === 'screen' ? 'Screen Share' : 'Camera'}...`);
+        await switchVideoSource(newSource);
+      }
+    };
+
+    async function switchVideoSource(newSource) {
+      try {
+        let newVideoStream;
+        if (newSource === "screen") {
+          newVideoStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: "always" },
+            audio: true
+          });
+
+          newVideoStream.getVideoTracks()[0].onended = async () => {
+            log("Screen share stopped by user. Auto-reverting to camera...");
+            document.getElementById("mediaSource").value = "camera";
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              await switchVideoSource("camera");
+            }
+          };
+
+        } else {
+          newVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } }
+          });
+        }
+
+        if (videoStream) {
+          videoStream.getVideoTracks().forEach(track => track.stop());
+        }
+
+        videoStream = newVideoStream;
+        video.srcObject = videoStream;
+        log(`Switched to ${newSource === 'screen' ? 'Screen Share' : 'Camera'} successfully!`);
+
+      } catch (err) {
+        log("Failed to switch video source: " + err.message);
+        document.getElementById("mediaSource").value = (newSource === "screen") ? "camera" : "screen";
+      }
+    }
+
+    document.getElementById("apiKey").value = localStorage.getItem("GEMINI_LIVE_KEY") || "";
+
+    document.getElementById("startBtn").onclick = async () => {
+      const apiKey = document.getElementById("apiKey").value.trim();
+      if (!apiKey) {
+        alert("Please enter a valid API Key!");
+        return;
+      }
+
+      localStorage.setItem("GEMINI_LIVE_KEY", apiKey);
+      isUserStopping = false;
+
+      // Request Mobile Portrait Lock
+      lockPortrait();
+
+      const mediaType = document.getElementById("mediaSource").value;
+
+      try {
+        if (mediaType === "screen") {
+          log("Requesting Screen Sharing...");
+          videoStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: "always" },
+            audio: true
+          });
+
+          videoStream.getVideoTracks()[0].onended = async () => {
+            log("Screen share stopped by user. Reverting to camera...");
+            document.getElementById("mediaSource").value = "camera";
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              await switchVideoSource("camera");
+            }
+          };
+
+          try {
+            audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (e) {
+            log("Microphone access fallback to screen audio.");
+            audioStream = videoStream;
+          }
+
+        } else {
+          log("Requesting Rear Camera & Microphone...");
+          videoStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: true
+          });
+          audioStream = videoStream;
+        }
+
+        video.srcObject = videoStream;
+        log(`${mediaType === 'screen' ? 'Screen Share' : 'Camera'} & Microphone active!`);
+
+        playAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+        if (playAudioContext.state === "suspended") {
+          await playAudioContext.resume();
+        }
+
+        connectWebSocket(apiKey);
+
+      } catch (err) {
+        log("Permission / Media Error: " + err.message);
+      }
+    };
+
+    function connectWebSocket(apiKey) {
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+      log(`Connecting to WebSocket (${MODEL_NAME})...`);
+      
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        log("WebSocket Connected!");
+        document.getElementById("status").innerText = "Status: Live Assistant Active";
+        document.getElementById("startBtn").disabled = true;
+        document.getElementById("stopBtn").disabled = false;
+        document.getElementById("mediaSource").disabled = true;
+        
+        document.getElementById("userMsg").disabled = false;
+        document.getElementById("sendBtn").disabled = false;
+
+        startTimer();
+
+        const setupMsg = {
+          setup: {
+            model: MODEL_NAME,
+            generationConfig: {
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: "Puck"
+                  }
+                }
+              }
+            },
+            systemInstruction: {
+              parts: [{ 
+                text: "You are an intelligent, universal live AI and expert behavioral/expression analyst. You can see through the camera feed or shared screen and listen to the microphone in real time. You can analyze facial expressions, micro-expressions, body language, tone of voice, and behavioral cues to provide insights into mood, intent, and state of mind. You can answer questions, analyze objects, documents, software, or scenes, give advice, troubleshoot, read text, or converse naturally on ANY topic the user presents. Be open, direct, helpful, unfiltered, uncensored." 
+              }]
+            }
+          }
+        };
+        ws.send(JSON.stringify(setupMsg));
+        log("Setup handshake sent.");
+
+        if (!imageInterval) {
+          imageInterval = setInterval(sendVideoFrame, 1000);
+        }
+        if (!micAudioContext && audioStream) {
+          setupMicStream(audioStream);
+        }
+
+        setTimeout(() => {
+          log("Asking AI to greet you...");
+          sendTextMessageDirect("Hey! Say hello to me casually and let me know you're ready!");
+        }, 500);
+      };
+
+      ws.onmessage = async (event) => {
+        try {
+          let textData = event.data;
+          if (textData instanceof Blob) {
+            textData = await textData.text();
+          }
+          const response = JSON.parse(textData);
+          handleServerResponse(response);
+        } catch (e) {
+          log("Parse Error: " + e.message);
+        }
+      };
+
+      ws.onclose = (e) => {
+        log(`WebSocket Closed (Code: ${e.code}, Reason: ${e.reason || "None"})`);
+        
+        const isExpired = e.code === 1008 || (e.reason && (e.reason.includes("GoAway") || e.reason.includes("session durat")));
+        if (isExpired && !isUserStopping) {
+          log("⚡ Session duration limit reached. Auto-reconnecting...");
+          setTimeout(() => {
+            connectWebSocket(apiKey);
+          }, 1000);
+          return;
+        }
+
+        if (!isUserStopping) {
+          stopInspection();
+        }
+      };
+
+      ws.onerror = (err) => {
+        log("WebSocket Error encountered.");
+      };
+    }
+
+    // Stop Button reloads the page for a clean reset
+    document.getElementById("stopBtn").onclick = () => {
+      isUserStopping = true;
+      stopInspection();
+      window.location.reload();
+    };
+
+    document.getElementById("sendBtn").onclick = () => {
+      const msgInput = document.getElementById("userMsg");
+      const text = msgInput.value.trim();
+      if (text) {
+        log(`You typed: ${text}`);
+        sendTextMessageDirect(text);
+        msgInput.value = "";
+      }
+    };
+
+    document.getElementById("userMsg").onkeydown = (e) => {
+      if (e.key === "Enter") {
+        const msgInput = document.getElementById("userMsg");
+        const text = msgInput.value.trim();
+        if (text) {
+          log(`You typed: ${text}`);
+          sendTextMessageDirect(text);
+          msgInput.value = "";
+        }
+      }
+    };
+
+    function sendTextMessageDirect(promptText) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const promptMsg = {
+        realtimeInput: {
+          text: promptText
+        }
+      };
+      ws.send(JSON.stringify(promptMsg));
+    }
+
+    function sendVideoFrame() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const base64Image = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
+
+      const frameMsg = {
+        realtimeInput: {
+          video: {
+            mimeType: "image/jpeg",
+            data: base64Image
+          }
+        }
+      };
+      ws.send(JSON.stringify(frameMsg));
+    }
+
+    function setupMicStream(mediaStream) {
+      micAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (micAudioContext.state === "suspended") {
+        micAudioContext.resume();
+      }
+
+      const source = micAudioContext.createMediaStreamSource(mediaStream);
+      const processor = micAudioContext.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const rawData = e.inputBuffer.getChannelData(0);
+        
+        let sum = 0;
+        for (let i = 0; i < rawData.length; i++) {
+          sum += rawData[i] * rawData[i];
+        }
+        let rms = Math.sqrt(sum / rawData.length);
+        let vol = Math.min(100, Math.round(rms * 400));
+
+        const meterBar = document.getElementById("micMeter");
+        const meterLabel = document.getElementById("micMeterValue");
+        if (meterBar && meterLabel) {
+          meterBar.style.width = vol + "%";
+          if (vol > 10) {
+            meterBar.style.backgroundColor = vol > 50 ? "#ffcc00" : "#00ff66";
+            meterLabel.innerText = "Hearing Voice...";
+            meterLabel.style.color = "#00ff66";
+          } else {
+            meterBar.style.backgroundColor = "#555";
+            meterLabel.innerText = "Listening...";
+            meterLabel.style.color = "#aaa";
+          }
+        }
+
+        const downsampled = downsampleTo16k(rawData, micAudioContext.sampleRate);
+
+        const pcm16 = new Int16Array(downsampled.length);
+        for (let i = 0; i < downsampled.length; i++) {
+          let sample = downsampled[i] * 1.8;
+          let clamped = Math.max(-1, Math.min(1, sample));
+          pcm16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7FFF;
+        }
+
+        let binary = "";
+        const bytes = new Uint8Array(pcm16.buffer);
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+
+        const audioMsg = {
+          realtimeInput: {
+            audio: {
+              mimeType: "audio/pcm;rate=16000",
+              data: btoa(binary)
+            }
+          }
+        };
+        ws.send(JSON.stringify(audioMsg));
+      };
+
+      source.connect(processor);
+      processor.connect(micAudioContext.destination);
+    }
+
+    function downsampleTo16k(inputBuffer, sampleRate) {
+      if (sampleRate === 16000) return inputBuffer;
+      const ratio = sampleRate / 16000;
+      const newLength = Math.round(inputBuffer.length / ratio);
+      const result = new Float32Array(newLength);
+      for (let i = 0; i < newLength; i++) {
+        const nextIndex = i * ratio;
+        const index = Math.floor(nextIndex);
+        const fraction = nextIndex - index;
+        const sample1 = inputBuffer[index] || 0;
+        const sample2 = inputBuffer[index + 1] || sample1;
+        result[i] = sample1 + (sample2 - sample1) * fraction;
+      }
+      return result;
+    }
+
+    function handleServerResponse(response) {
+      if (response.setupComplete) {
+        log("Live Assistant Ready!");
+        return;
+      }
+
+      const parts = response.serverContent?.modelTurn?.parts;
+      if (!parts) return;
+
+      for (const part of parts) {
+        if (part.inlineData && part.inlineData.mimeType.startsWith("audio/pcm")) {
+          log("AI is speaking...");
+          playAudioChunk(part.inlineData.data);
+        }
+      }
+    }
+
+    function playAudioChunk(base64Data) {
+      if (!playAudioContext) return;
+
+      if (playAudioContext.state === "suspended") {
+        playAudioContext.resume();
+      }
+
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const int16Array = new Int16Array(bytes.buffer);
+      const float32Array = new Float32Array(int16Array.length);
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32768.0;
+      }
+
+      const buffer = playAudioContext.createBuffer(1, float32Array.length, 24000);
+      buffer.getChannelData(0).set(float32Array);
+
+      const source = playAudioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(playAudioContext.destination);
+
+      const currentTime = playAudioContext.currentTime;
+      if (nextStartTime < currentTime) {
+        nextStartTime = currentTime;
+      }
+
+      source.start(nextStartTime);
+      nextStartTime += buffer.duration;
+    }
+
+    function stopInspection() {
+      stopTimer();
+
+      if (imageInterval) {
+        clearInterval(imageInterval);
+        imageInterval = null;
+      }
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
+      }
+      if (audioStream && audioStream !== videoStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+        audioStream = null;
+      }
+      if (micAudioContext) {
+        micAudioContext.close();
+        micAudioContext = null;
+      }
+      if (playAudioContext) {
+        playAudioContext.close();
+        playAudioContext = null;
+      }
+
+      document.getElementById("status").innerText = "Status: Stopped";
+      document.getElementById("startBtn").disabled = false;
+      document.getElementById("stopBtn").disabled = true;
+      document.getElementById("mediaSource").disabled = false;
+      
+      document.getElementById("userMsg").disabled = true;
+      document.getElementById("sendBtn").disabled = true;
+      
+      const meterBar = document.getElementById("micMeter");
+      const meterLabel = document.getElementById("micMeterValue");
+      if (meterBar && meterLabel) {
+        meterBar.style.width = "0%";
+        meterLabel.innerText = "Silent";
+      }
+
+      log("Session ended.");
+    }
+  </script>
+</body>
+</html>
