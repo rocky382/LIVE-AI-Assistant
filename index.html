@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Live AI Assistant</title>
+
+  <!-- iOS Web Clip & Home Screen Configuration -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Live AI">
+
+  <!-- Base64 Encoded iOS Home Screen App Icon (180x180 PNG) -->
+  <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALEAAACxCAYAAAC8f284AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAYfSURBVHgB7d1NbBRFGAfgX2m33Za23XZbWnoB2pA2UIs2eEFC4oGeiL144MGD8eTBgxK9e/CgB4968KCXe/DgTYmJJ/XiwRijSExQo4RSoK3/thS23S1tt93Zme33ks233b2Z/c33fTO7s/P1PZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSdL14x42k5aWFr/f73ePHz9+3OfzuS/8/X7S6/W6/f39/f3p6enpdrt9e/369f/vX1lZsbxe728e/f39fUvL29/f3/T7/SXX/y3s/9v6+/s3/X7/d618f3/frs/n3x3d9+/vf23e/4MHD6622+3p69evX/9p7969e623t7dncnJyevny5en9+/fPt/YfPnzonZ2d7dt348aNzeX/f77f3Ny829zc/Mvb399/r9Xv7++f2f/s/X33e6f98ePHr3/28OHDd75pt9uvf3f16tUnf/P1k4/23y4/s/m5dvu5pSfe/5v2X5/9u63276x9fvbfXf9e/Xet2c/t333+/Pmrdtv/0p49e/aXNzc39+j/G3A++r+/v3/T4/G4L/L39/e3+/v7u/39/eX9/f1t+/v7O/39/e3l/f1N+/v719vt9n/+/v333/x4/PjxG/38v9L+f1z/X157/2/a7a/d3Nzsv379+tXP2+/uXW6/uXf3/43m8y/ffr32+t/8f1z7d3v3/33p1X9f/2P2v177X3s3/3vtr1f/fPPNN1+//e233367+m/b7e5/0f834Hz83+6/u3/a/vebbm4+ftm+/f39f3/+31m91f/k8+/fv/9B/Sdt/i/5f1L/m4mLi4tnV/6p/b2tra3m29vf+/3+S3/10/7b4uLif99+9dNP/11/9d/9e41Go3/q/xvwd1999dWzVj0eTyf37/D1/b1eL3H9v3nyN3u9Xtc98T++/L+56f2/5u1ffPvt/2s/ePjw4eu3b9/eX33+3P/y01+93L91/e1fXv1oXf+3rf6fdf2Pq/93eX/fX3f3/3P9v3nt3239eP732vevrS39+f8/v/3/i7e3t59s/vfR5u3eXf+8ub6+vrG6uvqy/nfp7e+939zc3Fz93+r///m3trb++/pnv/q7P2/u2S3fef+/X//f9v6S/v3988uX3/+0++b27Xvt2/X19b/X1tb+Xfve4/H4uS3N5/X/I/yvv/1N/95e+/r/fvv/S3v/+f7b3e+ff9/8/v4Nf+fGjc3+/g0/t/i1S+/9u9/4S0tLXrf/z29v33q8113v9fWtbX/8+PGx5vvLrfbvtrbf3bxpt1t/df2vv/5377f3/90q//3f1e9/mfe3v7//u883X7f3e+/3+/2X/L+t1f/T/r9v3b/199f/vP3eX/1o69/7y++ffPn4321t72f6/x3y21t1/39fe3uX/L+9d3d3/631O/m/+9m3m3/X3L/f/3vv3m9992fve/f2u5vt9vvt28uX/v3e2tr8/dne5ubmn3f5O/v393+0/O3m5ub0z3X33/7V7v9f+vf1v7v/3+X3X2i1m/+m/j350z++/XNbeXp9S/+65Xv/+sS//L4X7/133fvd/1u+v9a++/f7u/svev4X1x7s7u31ej1er9eX4f09Pj/uX/Pq91P7b3c3N/a/236z/+9q//eX/p3f//4e397eXnv/H+n/U2vvf1L/D3n0v1v98v6Xff/+7/3e/n29vS23z3f17XdLb/9t6fd/Xf//eS3e3d2fvv98v3v15cv2+/3Xb/9Nf1L/N/f19f20++d3Xn31/s9/X333//G/tNtd9/e62zX/T9e3+3tdt1tb3W1/f99e8/9m929sXG+3m/9t//2/3/+z+/3uC3/fftvv5L3//A2/X++P6vf04313fOvf+ve/u3/3v7P/99X35/e432//Xp+3tbXlvvzX7m5d/5t1r9e72drX/uSrr37f/p/+33y7vb291fzn3f2S/r2/2+/v9/e3+/v7+/39/e3/379er9f3+/X2fD6/r326/+/z+v1u/N/r09P80+///A/YqQ220H0EIAAAAABJRU5ErkJggg==">
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALEAAACxCAYAAAC8f284AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAYfSURBVHgB7d1NbBRFGAfgX2m33Za23XZbWnoB2pA2UIs2eEFC4oGeiL144MGD8eTBgxK9e/CgB4968KCXe/DgTYmJJ/XiwRijSExQo4RSoK3/thS23S1tt93Zme33ks233b2Z/c33fTO7s/P1PZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSdL14x42k5aWFr/f73ePHz9+3OfzuS/8/X7S6/W6/f39/f3p6enpdrt9e/369f/vX1lZsbxe728e/f39fUvL29/f3/T7/SXX/y3s/9v6+/s3/X7/d618f3/frs/n3x3d9+/vf23e/4MHD6622+3p69evX/9p7969e623t7dncnJyevny5en9+/fPt/YfPnzonZ2d7dt348aNzeX/f77f3Ny829zc/Mvb399/r9Xv7++f2f/s/X33e6f98ePHr3/28OHDd75pt9uvf3f16tUnf/P1k4/23y4/s/m5dvu5pSfe/5v2X5/9u63276x9fvbfXf9e/Xet2c/t333+/Pmrdtv/0p49e/aXNzc39+j/G3A++r+/v3/T4/G4L/L39/e3+/v7u/39/eX9/f1t+/v7O/39/e3l/f1N+/v719vt9n/+/v333/x4/PjxG/38v9L+f1z/X157/2/a7a/d3Nzsv379+tXP2+/uXW6/uXf3/43m8y/ffr32+t/8f1z7d3v3/33p1X9f/2P2v177X3s3/3vtr1f/fPPNN1+//e233367+m/b7e5/0f834Hz83+6/u3/a/vebbm4+ftm+/f39f3/+31m91f/k8+/fv/9B/Sdt/i/5f1L/m4mLi4tnV/6p/b2tra3m29vf+/3+S3/10/7b4uLif99+9dNP/11/9d/9e41Go3/q/xvwd1999dWzVj0eTyf37/D1/b1eL3H9v3nyN3u9Xtc98T++/L+56f2/5u1ffPvt/2s/ePjw4eu3b9/eX33+3P/y01+93L91/e1fXv1oXf+3rf6fdf2Pq/93eX/fX3f3/3P9v3nt3239eP732vevrS39+f8/v/3/i7e3t59s/vfR5u3eXf+8ub6+vrG6uvqy/nfp7e+939zc3Fz93+r///m3trb++/pnv/q7P2/u2S3fef+/X//f9v6S/v3988uX3/+0++b27Xvt2/X19b/X1tb+Xfve4/H4uS3N5/X/I/yvv/1N/95e+/r/fvv/S3v/+f7b3e+ff9/8/v4Nf+fGjc3+/g0/t/i1S+/9u9/4S0tLXrf/z29v33q8113v9fWtbX/8+PGx5vvLrfbvtrbf3bxpt1t/df2vv/5377f3/90q//3f1e9/mfe3v7//u883X7f3e+/3+/2X/L+t1f/T/r9v3b/199f/vP3eX/1o69/7y++ffPn4321t72f6/x3y21t1/39fe3uX/L+9d3d3/631O/m/+9m3m3/X3L/f/3vv3m9992fve/f2u5vt9vvt28uX/v3e2tr8/dne5ubmn3f5O/v393+0/O3m5ub0z3X33/7V7v9f+vf1v7v/3+X3X2i1m/+m/j350z++/XNbeXp9S/+65Xv/+sS//L4X7/133fvd/1u+v9a++/f7u/svev4X1x7s7u31ej1er9eX4f09Pj/uX/Pq91P7b3c3N/a/236z/+9q//eX/p3f//4e397eXnv/H+n/U2vvf1L/D3n0v1v98v6Xff/+7/3e/n29vS23z3f17XdLb/9t6fd/Xf//eS3e3d2fvv98v3v15cv2+/3Xb/9Nf1L/N/f19f20++d3Xn31/s9/X333//G/tNtd9/e62zX/T9e3+3tdt1tb3W1/f99e8/9m929sXG+3m/9t//2/3/+z+/3uC3/fftvv5L3//A2/X++P6vf04313fOvf+ve/u3/3v7P/99X35/e432//Xp+3tbXlvvzX7m5d/5t1r9e72drX/uSrr37f/p/+33y7vb291fzn3f2S/r2/2+/v9/e3+/v7+/39/e3/379er9f3+/X2fD6/r326/+/z+v1u/N/r09P80+///A/YqQ220H0EIAAAAABJRU5ErkJggg==">
+
   <style>
     * { box-sizing: border-box; }
     html, body {
@@ -20,38 +30,50 @@
       background-color: #121212;
       color: #ffffff;
       margin: 0;
-      padding: 15px;
+      padding: 10px;
       text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: space-between;
     }
-    h2 { margin-top: 5px; margin-bottom: 15px; color: #4dabf7; font-size: 22px; }
+    h2 { margin: 2px 0 8px 0; color: #4dabf7; font-size: 20px; }
+    
+    /* Maximized Phone Screen Video Container */
     #videoContainer {
       position: relative;
       width: 100%;
-      max-width: 480px;
+      max-width: 500px;
+      flex: 1; /* Takes up maximum available screen height */
+      min-height: 250px;
+      max-height: 62vh; /* Maximize vertical height on mobile */
       margin: 0 auto;
-      border-radius: 12px;
+      border-radius: 14px;
       overflow: hidden;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.7);
       background: #000;
-      aspect-ratio: 4/3;
     }
-    video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
     .controls {
       width: 100%;
-      max-width: 480px;
-      margin: 15px auto;
-      padding: 12px;
+      max-width: 500px;
+      margin: 8px 0 0 0;
+      padding: 10px;
       background: #1e1e1e;
-      border-radius: 10px;
+      border-radius: 12px;
     }
+
     /* Input and Button Rows */
     .row {
       display: flex;
       gap: 8px;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       align-items: center;
     }
     input, button, select {
@@ -69,7 +91,7 @@
       transition: opacity 0.2s;
     }
     .flex-1 { flex: 1; }
-    .btn-logs { background-color: #495057; color: white; width: 90px; }
+    .btn-logs { background-color: #495057; color: white; width: 85px; }
     .btn-logs:hover { background-color: #6c757d; }
     
     /* Start, Stop & Timer Side-By-Side */
@@ -94,7 +116,7 @@
     }
 
     /* Chat Input Box Row */
-    .chat-box { display: flex; gap: 8px; margin-top: 10px; }
+    .chat-box { display: flex; gap: 8px; margin-top: 8px; }
     .chat-box input { margin: 0; }
     .chat-box button {
       width: 75px;
@@ -130,14 +152,14 @@
     #status {
       font-weight: bold;
       color: #ffd43b;
-      margin-top: 8px;
+      margin-top: 6px;
       font-size: 13px;
     }
 
     /* Developer Footer Tag */
     .footer {
-      margin-top: 15px;
-      font-size: 13px;
+      margin-top: 8px;
+      font-size: 12px;
       color: #888;
       font-weight: bold;
       letter-spacing: 0.5px;
@@ -152,11 +174,11 @@
       padding: 10px;
       font-family: monospace;
       font-size: 11px;
-      height: 130px;
+      height: 120px;
       overflow-y: auto;
       width: 100%;
-      max-width: 480px;
-      margin: 10px auto;
+      max-width: 500px;
+      margin: 8px auto 0 auto;
       border-radius: 8px;
       border: 1px solid #333;
     }
@@ -206,7 +228,7 @@
     <div id="status">Status: Disconnected</div>
 
     <!-- API Key + Log Toggle Button Row -->
-    <div class="row" style="margin-top: 15px; margin-bottom: 0;">
+    <div class="row" style="margin-top: 10px; margin-bottom: 0;">
       <input type="password" id="apiKey" placeholder="Paste API Key Here">
       <button id="toggleLogsBtn" class="btn-logs">📜 Logs</button>
     </div>
@@ -266,7 +288,6 @@
       document.getElementById("timerDisplay").innerText = "00:00";
     }
 
-    // Lock Portrait Orientation on mobile screens if supported
     function lockPortrait() {
       if (screen.orientation && screen.orientation.lock) {
         screen.orientation.lock("portrait").catch(() => {});
@@ -341,7 +362,6 @@
       localStorage.setItem("GEMINI_LIVE_KEY", apiKey);
       isUserStopping = false;
 
-      // Request Mobile Portrait Lock
       lockPortrait();
 
       const mediaType = document.getElementById("mediaSource").value;
