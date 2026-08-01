@@ -178,11 +178,19 @@
   </div>
 
   <div class="controls">
-    <!-- Media Source Selector (Camera or Screen Share) -->
+    <!-- Media Source & FPS Selector Row -->
     <div class="row">
-      <select id="mediaSource">
+      <select id="mediaSource" class="flex-1">
         <option value="camera">📷 Rear Camera</option>
         <option value="screen">🖥️ Screen Share</option>
+      </select>
+      
+      <select id="fpsSelect" style="width: 130px;">
+        <option value="1" selected>⚡ 1 FPS</option>
+        <option value="2">⚡ 2 FPS</option>
+        <option value="3">⚡ 3 FPS</option>
+        <option value="4">⚡ 4 FPS</option>
+        <option value="5">⚡ 5 FPS</option>
       </select>
     </div>
 
@@ -273,6 +281,22 @@
       document.getElementById("timerDisplay").innerText = "00:00";
     }
 
+    // Dynamic Video Interval Function based on FPS selection
+    function startVideoInterval() {
+      if (imageInterval) clearInterval(imageInterval);
+      const fps = parseInt(document.getElementById("fpsSelect").value) || 1;
+      const intervalMs = Math.round(1000 / fps);
+      imageInterval = setInterval(sendVideoFrame, intervalMs);
+      log(`Video stream updated to ${fps} FPS (${intervalMs}ms interval).`);
+    }
+
+    // Dynamic FPS Change Handler
+    document.getElementById("fpsSelect").onchange = () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        startVideoInterval();
+      }
+    };
+
     // Lock Portrait Orientation on mobile screens if supported
     function lockPortrait() {
       if (screen.orientation && screen.orientation.lock) {
@@ -348,7 +372,6 @@
       localStorage.setItem("GEMINI_LIVE_KEY", apiKey);
       isUserStopping = false;
 
-      // Request Mobile Portrait Lock
       lockPortrait();
 
       const mediaType = document.getElementById("mediaSource").value;
@@ -411,7 +434,6 @@
         document.getElementById("status").innerText = "Status: Live Assistant Active";
         document.getElementById("startBtn").disabled = true;
         document.getElementById("stopBtn").disabled = false;
-        document.getElementById("mediaSource").disabled = true;
         
         document.getElementById("userMsg").disabled = false;
         document.getElementById("sendBtn").disabled = false;
@@ -441,9 +463,9 @@
         ws.send(JSON.stringify(setupMsg));
         log("Setup handshake sent.");
 
-        if (!imageInterval) {
-          imageInterval = setInterval(sendVideoFrame, 1000);
-        }
+        // Start video interval based on selected FPS
+        startVideoInterval();
+
         if (!micAudioContext && audioStream) {
           setupMicStream(audioStream);
         }
@@ -712,7 +734,6 @@
       document.getElementById("status").innerText = "Status: Stopped";
       document.getElementById("startBtn").disabled = false;
       document.getElementById("stopBtn").disabled = true;
-      document.getElementById("mediaSource").disabled = false;
       
       document.getElementById("userMsg").disabled = true;
       document.getElementById("sendBtn").disabled = true;
