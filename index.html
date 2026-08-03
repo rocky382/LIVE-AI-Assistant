@@ -27,7 +27,7 @@
       height: 100vh;
       max-width: 500px;
     }
-    /* Maximized Camera Container */
+    /* Maximized Clean Camera Container */
     #videoContainer {
       position: relative;
       width: 100%;
@@ -45,6 +45,7 @@
       object-fit: cover;
       display: block;
     }
+
     /* Compact Controls Panel Docked at Bottom */
     .controls {
       width: 100%;
@@ -75,7 +76,9 @@
       transition: opacity 0.2s;
     }
     .flex-1 { flex: 1; }
-    .btn-logs { background-color: #495057; color: white; width: 85px; }
+    .btn-chat { background-color: #1c7ed6; color: white; width: 75px; }
+    .btn-chat:hover { background-color: #228be6; }
+    .btn-logs { background-color: #495057; color: white; width: 75px; }
     .btn-logs:hover { background-color: #6c757d; }
     
     /* Start, Stop & Timer Side-By-Side */
@@ -150,6 +153,34 @@
       flex-shrink: 0;
     }
 
+    /* Chat History Overlay Panel */
+    #historyPanel {
+      display: none;
+      background: #181818;
+      color: #ffffff;
+      text-align: left;
+      padding: 10px;
+      font-size: 12px;
+      height: 140px;
+      overflow-y: auto;
+      width: 100%;
+      max-width: 500px;
+      margin: 6px auto 0 auto;
+      border-radius: 8px;
+      border: 1px solid #333;
+      flex-shrink: 0;
+    }
+    .hist-msg {
+      padding: 6px 10px;
+      margin-bottom: 6px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.3;
+      word-wrap: break-word;
+    }
+    .hist-msg.user { background: #005c4b; color: #fff; }
+    .hist-msg.ai { background: #262d31; color: #fff; }
+
     /* Debug Logs Overlay Panel */
     #logPanel {
       display: none;
@@ -172,7 +203,7 @@
 </head>
 <body>
 
-  <!-- Maximized Video Stream Container -->
+  <!-- Maximized Video Stream Container (Clean View) -->
   <div id="videoContainer">
     <video id="webcam" autoplay playsinline muted></video>
   </div>
@@ -220,15 +251,25 @@
 
     <div id="status">Status: Disconnected</div>
 
-    <!-- API Key + Log Toggle Button Row -->
+    <!-- API Key + Chat History + Log Toggle Button Row -->
     <div class="row" style="margin-top: 10px; margin-bottom: 0;">
       <input type="password" id="apiKey" placeholder="Paste API Key Here">
+      <button id="toggleHistoryBtn" class="btn-chat">💬 Chat</button>
       <button id="toggleLogsBtn" class="btn-logs">📜 Logs</button>
     </div>
   </div>
 
   <!-- Developer Footer -->
   <div class="footer">Developed by ROCKY</div>
+
+  <!-- Chat History Panel (Hidden by default) -->
+  <div id="historyPanel">
+    <div style="font-weight: bold; margin-bottom: 6px; color: #4dabf7; display: flex; justify-content: space-between;">
+      <span>Conversation History</span>
+      <span id="closeHistory" style="cursor: pointer;">✖</span>
+    </div>
+    <div id="historyContent"><span style="color:#888; font-style:italic;">No conversation history yet...</span></div>
+  </div>
 
   <!-- Debug Logs Panel (Hidden by default) -->
   <div id="logPanel">Logs initialized...</div>
@@ -246,6 +287,9 @@
     let nextStartTime = 0;
     let isUserStopping = false;
     let isReconnecting = false;
+
+    // Current turn text accumulator
+    let currentTurnText = "";
 
     // Conversation Memory Array across reconnects
     let conversationHistory = [];
@@ -267,10 +311,29 @@
     function recordHistory(sender, text) {
       if (!text) return;
       conversationHistory.push(`${sender}: ${text}`);
-      // Keep last 25 turns to avoid payload size overflow
       if (conversationHistory.length > 25) {
         conversationHistory.shift();
       }
+      renderHistoryPanel();
+    }
+
+    function renderHistoryPanel() {
+      const content = document.getElementById("historyContent");
+      if (!content) return;
+
+      if (conversationHistory.length === 0) {
+        content.innerHTML = `<span style="color:#888; font-style:italic;">No conversation history yet...</span>`;
+        return;
+      }
+
+      let html = "";
+      for (const turn of conversationHistory) {
+        const isUser = turn.startsWith("User");
+        const className = isUser ? "hist-msg user" : "hist-msg ai";
+        html += `<div class="${className}">${turn}</div>`;
+      }
+      content.innerHTML = html;
+      content.scrollTop = content.scrollHeight;
     }
 
     function startTimer() {
@@ -294,6 +357,37 @@
       document.getElementById("timerDisplay").innerText = "00:00";
     }
 
+    // Toggle Chat History Panel
+    document.getElementById("toggleHistoryBtn").onclick = () => {
+      const historyPanel = document.getElementById("historyPanel");
+      const logPanel = document.getElementById("logPanel");
+      logPanel.style.display = "none";
+
+      if (historyPanel.style.display === "block") {
+        historyPanel.style.display = "none";
+      } else {
+        renderHistoryPanel();
+        historyPanel.style.display = "block";
+      }
+    };
+
+    document.getElementById("closeHistory").onclick = () => {
+      document.getElementById("historyPanel").style.display = "none";
+    };
+
+    // Toggle Technical Debug Logs Panel
+    document.getElementById("toggleLogsBtn").onclick = () => {
+      const logPanel = document.getElementById("logPanel");
+      const historyPanel = document.getElementById("historyPanel");
+      historyPanel.style.display = "none";
+
+      if (logPanel.style.display === "block") {
+        logPanel.style.display = "none";
+      } else {
+        logPanel.style.display = "block";
+      }
+    };
+
     // Dynamic Video Interval Function based on FPS selection
     function startVideoInterval() {
       if (imageInterval) clearInterval(imageInterval);
@@ -316,16 +410,6 @@
         screen.orientation.lock("portrait").catch(() => {});
       }
     }
-
-    // Toggle Technical Debug Logs Panel
-    document.getElementById("toggleLogsBtn").onclick = () => {
-      const logPanel = document.getElementById("logPanel");
-      if (logPanel.style.display === "block") {
-        logPanel.style.display = "none";
-      } else {
-        logPanel.style.display = "block";
-      }
-    };
 
     // Live Mid-Session Media Source Switcher Handler
     document.getElementById("mediaSource").onchange = async (e) => {
@@ -360,7 +444,7 @@
         }
 
         if (videoStream) {
-          videoStream.getVideoTracks().forEach(track => track.stop());
+          videoStream.getVideoTracks()[0].stop();
         }
 
         videoStream = newVideoStream;
@@ -385,7 +469,8 @@
       localStorage.setItem("GEMINI_LIVE_KEY", apiKey);
       isUserStopping = false;
       isReconnecting = false;
-      conversationHistory = []; // Reset history for fresh manual start
+      conversationHistory = [];
+      renderHistoryPanel();
 
       lockPortrait();
 
@@ -457,8 +542,7 @@
           startTimer();
         }
 
-        // Build system instruction including PREVIOUS CONVERSATION MEMORY if reconnecting
-        let systemPromptText = "You are an intelligent, live AI and expert behavioral/expression analyst. You can see through the camera feed or shared screen and listen to the microphone in real time. You can analyze facial expressions, micro-expressions, body language, tone of voice, and behavioral cues to provide insights into mood, intent, and state of mind. You can answer questions, analyze objects, documents, software, or scenes, give advice, troubleshoot, read text, or converse naturally on ANY topic the user presents. Be open, direct, short, helpful, unfiltered, and uncensored.";
+        let systemPromptText = "You are an intelligent, universal live AI and expert behavioral/expression analyst. You can see through the camera feed or shared screen and listen to the microphone in real time. You can analyze facial expressions, micro-expressions, body language, tone of voice, and behavioral cues to provide insights into mood, intent, and state of mind. You can answer questions, analyze objects, documents, software, or scenes, give advice, troubleshoot, read text, or converse naturally on ANY topic the user presents. Be open, direct, helpful, unfiltered, uncensored.";
 
         if (conversationHistory.length > 0) {
           log(`Injecting ${conversationHistory.length} previous conversation turns into memory...`);
@@ -478,13 +562,15 @@
                 }
               }
             },
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
             systemInstruction: {
               parts: [{ text: systemPromptText }]
             }
           }
         };
         ws.send(JSON.stringify(setupMsg));
-        log("Setup handshake sent with memory payload.");
+        log("Setup handshake sent.");
 
         startVideoInterval();
 
@@ -689,16 +775,38 @@
         return;
       }
 
-      const parts = response.serverContent?.modelTurn?.parts;
-      if (!parts) return;
+      // Extract User Voice Transcription if returned by Gemini server
+      const userTranscript = response.serverContent?.inputAudioTranscription?.text || response.serverContent?.inputTranscription?.text;
+      if (userTranscript) {
+        recordHistory("User (Voice)", userTranscript);
+      }
 
-      for (const part of parts) {
-        if (part.text) {
-          recordHistory("Gemini", part.text);
+      // Extract AI Spoken Text Transcription
+      const aiText = response.serverContent?.outputAudioTranscription?.text || 
+                     response.serverContent?.outputTranscription?.text;
+      
+      if (aiText) {
+        currentTurnText += aiText;
+      }
+
+      // Extract text parts if present
+      const parts = response.serverContent?.modelTurn?.parts;
+      if (parts) {
+        for (const part of parts) {
+          if (part.text) {
+            currentTurnText += part.text;
+          }
+          if (part.inlineData && part.inlineData.mimeType.startsWith("audio/pcm")) {
+            log("AI is speaking...");
+            playAudioChunk(part.inlineData.data);
+          }
         }
-        if (part.inlineData && part.inlineData.mimeType.startsWith("audio/pcm")) {
-          log("AI is speaking...");
-          playAudioChunk(part.inlineData.data);
+      }
+
+      if (response.serverContent?.turnComplete) {
+        if (currentTurnText.trim().length > 0) {
+          recordHistory("Gemini", currentTurnText);
+          currentTurnText = "";
         }
       }
     }
