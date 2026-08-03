@@ -27,7 +27,7 @@
       height: 100vh;
       max-width: 500px;
     }
-    /* Maximized Clean Camera Container */
+    /* Maximized Camera Container */
     #videoContainer {
       position: relative;
       width: 100%;
@@ -57,13 +57,13 @@
     /* Input and Button Rows */
     .row {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       margin-bottom: 8px;
       align-items: center;
     }
     input, button, select {
-      padding: 10px;
-      font-size: 14px;
+      padding: 10px 8px;
+      font-size: 13px;
       border-radius: 8px;
       border: 1px solid #333;
       touch-action: manipulation;
@@ -74,8 +74,11 @@
       border: none;
       cursor: pointer;
       transition: opacity 0.2s;
+      white-space: nowrap;
     }
     .flex-1 { flex: 1; }
+    .btn-speaker { background-color: #1c7ed6; color: white; width: 95px; }
+    .btn-speaker.off { background-color: #495057; }
     .btn-chat { background-color: #1c7ed6; color: white; width: 75px; }
     .btn-chat:hover { background-color: #228be6; }
     .btn-logs { background-color: #495057; color: white; width: 75px; }
@@ -203,26 +206,28 @@
 </head>
 <body>
 
-  <!-- Maximized Video Stream Container (Clean View) -->
+  <!-- Maximized Video Stream Container -->
   <div id="videoContainer">
     <video id="webcam" autoplay playsinline muted></video>
   </div>
 
   <div class="controls">
-    <!-- Media Source & FPS Selector Row -->
+    <!-- Media Source, FPS & Loudspeaker Row -->
     <div class="row">
       <select id="mediaSource" class="flex-1">
         <option value="camera">📷 Rear Camera</option>
         <option value="screen">🖥️ Screen Share</option>
       </select>
       
-      <select id="fpsSelect" style="width: 130px;">
+      <select id="fpsSelect" style="width: 85px;">
         <option value="1" selected>⚡ 1 FPS</option>
         <option value="2">⚡ 2 FPS</option>
         <option value="3">⚡ 3 FPS</option>
         <option value="4">⚡ 4 FPS</option>
         <option value="5">⚡ 5 FPS</option>
       </select>
+
+      <button id="speakerBtn" class="btn-speaker">🔊 Speaker</button>
     </div>
 
     <!-- Start, Stop & Live Timer Row -->
@@ -284,6 +289,8 @@
     let imageInterval = null;
     let micAudioContext = null;
     let playAudioContext = null;
+    let speakerGainNode = null;
+    let isLoudspeaker = true; // Loudspeaker active by default
     let nextStartTime = 0;
     let isUserStopping = false;
     let isReconnecting = false;
@@ -356,6 +363,37 @@
       }
       document.getElementById("timerDisplay").innerText = "00:00";
     }
+
+    // Loudspeaker Toggle Button Handler
+    document.getElementById("speakerBtn").onclick = async () => {
+      isLoudspeaker = !isLoudspeaker;
+      const btn = document.getElementById("speakerBtn");
+      
+      if (isLoudspeaker) {
+        btn.innerText = "🔊 Speaker";
+        btn.classList.remove("off");
+        if (speakerGainNode) speakerGainNode.gain.value = 2.5; // Boosted Loudspeaker volume
+        log("Loudspeaker mode active (Volume Boost 2.5x).");
+      } else {
+        btn.innerText = "🔈 Normal";
+        btn.classList.add("off");
+        if (speakerGainNode) speakerGainNode.gain.value = 1.0; // Normal volume
+        log("Normal earpiece speaker mode active.");
+      }
+
+      // Route audio via Native Media Output API if supported
+      if (navigator.mediaDevices && navigator.mediaDevices.selectAudioOutput) {
+        try {
+          const audioDevice = await navigator.mediaDevices.selectAudioOutput();
+          if (playAudioContext && typeof playAudioContext.setSinkId === 'function') {
+            await playAudioContext.setSinkId(audioDevice.deviceId);
+            log(`Audio output routed to device: ${audioDevice.label}`);
+          }
+        } catch (e) {
+          log("Native speaker selector: " + e.message);
+        }
+      }
+    };
 
     // Toggle Chat History Panel
     document.getElementById("toggleHistoryBtn").onclick = () => {
@@ -511,10 +549,15 @@
         video.srcObject = videoStream;
         log(`${mediaType === 'screen' ? 'Screen Share' : 'Camera'} & Microphone active!`);
 
+        // Initialize Audio Playback Context with Volume Gain Node
         playAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
         if (playAudioContext.state === "suspended") {
           await playAudioContext.resume();
         }
+
+        speakerGainNode = playAudioContext.createGain();
+        speakerGainNode.gain.value = isLoudspeaker ? 2.5 : 1.0;
+        speakerGainNode.connect(playAudioContext.destination);
 
         connectWebSocket(apiKey);
 
@@ -775,7 +818,7 @@
         return;
       }
 
-      // Extract User Voice Transcription if returned by Gemini server
+      // Extract User Voice Transcription
       const userTranscript = response.serverContent?.inputAudioTranscription?.text || response.serverContent?.inputTranscription?.text;
       if (userTranscript) {
         recordHistory("User (Voice)", userTranscript);
@@ -789,7 +832,6 @@
         currentTurnText += aiText;
       }
 
-      // Extract text parts if present
       const parts = response.serverContent?.modelTurn?.parts;
       if (parts) {
         for (const part of parts) {
@@ -835,7 +877,13 @@
 
       const source = playAudioContext.createBufferSource();
       source.buffer = buffer;
-      source.connect(playAudioContext.destination);
+
+      // Connect to Volume Boost Gain Node
+      if (speakerGainNode) {
+        source.connect(speakerGainNode);
+      } else {
+        source.connect(playAudioContext.destination);
+      }
 
       const currentTime = playAudioContext.currentTime;
       if (nextStartTime < currentTime) {
