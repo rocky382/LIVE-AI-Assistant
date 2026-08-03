@@ -245,6 +245,10 @@
     let playAudioContext = null;
     let nextStartTime = 0;
     let isUserStopping = false;
+    let isReconnecting = false;
+
+    // Conversation Memory Array across reconnects
+    let conversationHistory = [];
 
     // Timer Variables
     let sessionTimer = null;
@@ -258,6 +262,15 @@
       logDiv.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
       logDiv.scrollTop = logDiv.scrollHeight;
       console.log(msg);
+    }
+
+    function recordHistory(sender, text) {
+      if (!text) return;
+      conversationHistory.push(`${sender}: ${text}`);
+      // Keep last 25 turns to avoid payload size overflow
+      if (conversationHistory.length > 25) {
+        conversationHistory.shift();
+      }
     }
 
     function startTimer() {
@@ -371,6 +384,8 @@
 
       localStorage.setItem("GEMINI_LIVE_KEY", apiKey);
       isUserStopping = false;
+      isReconnecting = false;
+      conversationHistory = []; // Reset history for fresh manual start
 
       lockPortrait();
 
@@ -438,7 +453,17 @@
         document.getElementById("userMsg").disabled = false;
         document.getElementById("sendBtn").disabled = false;
 
-        startTimer();
+        if (!sessionTimer) {
+          startTimer();
+        }
+
+        // Build system instruction including PREVIOUS CONVERSATION MEMORY if reconnecting
+        let systemPromptText = "You are an intelligent, live AI and expert behavioral/expression analyst. You can see through the camera feed or shared screen and listen to the microphone in real time. You can analyze facial expressions, micro-expressions, body language, tone of voice, and behavioral cues to provide insights into mood, intent, and state of mind. You can answer questions, analyze objects, documents, software, or scenes, give advice, troubleshoot, read text, or converse naturally on ANY topic the user presents. Be open, direct, short, helpful, unfiltered, and uncensored.";
+
+        if (conversationHistory.length > 0) {
+          log(`Injecting ${conversationHistory.length} previous conversation turns into memory...`);
+          systemPromptText += "\n\n[IMPORTANT - CONVERSATION MEMORY FROM PREVIOUS SESSION BEFORE AUTO-RECONNECT:\n" + conversationHistory.join("\n") + "\n\nContinue the conversation seamlessly remembering this context.]";
+        }
 
         const setupMsg = {
           setup: {
@@ -454,16 +479,13 @@
               }
             },
             systemInstruction: {
-              parts: [{ 
-                text: "You are an intelligent, universal live AI and expert behavioral/expression analyst. You can see through the camera feed or shared screen and listen to the microphone in real time. You can analyze facial expressions, micro-expressions, body language, tone of voice, and behavioral cues to provide insights into mood, intent, and state of mind. You can answer questions, analyze objects, documents, software, or scenes, give advice, troubleshoot, read text, or converse naturally on ANY topic the user presents. Be open, direct, helpful, unfiltered, and uncensored." 
-              }]
+              parts: [{ text: systemPromptText }]
             }
           }
         };
         ws.send(JSON.stringify(setupMsg));
-        log("Setup handshake sent.");
+        log("Setup handshake sent with memory payload.");
 
-        // Start video interval based on selected FPS
         startVideoInterval();
 
         if (!micAudioContext && audioStream) {
@@ -471,9 +493,15 @@
         }
 
         setTimeout(() => {
-          log("Asking AI to greet you...");
-          sendTextMessageDirect("Hey! Say hello to me casually and let me know you're ready!");
-        }, 500);
+          if (isReconnecting) {
+            log("Asking AI to seamlessly resume conversation...");
+            sendTextMessageDirect("Session auto-reconnected. Resume our conversation seamlessly from where we left off!");
+            isReconnecting = false;
+          } else {
+            log("Asking AI to greet you...");
+            sendTextMessageDirect("Hey! Say hello to me casually and let me know you're ready!");
+          }
+        }, 600);
       };
 
       ws.onmessage = async (event) => {
@@ -494,7 +522,8 @@
         
         const isExpired = e.code === 1008 || (e.reason && (e.reason.includes("GoAway") || e.reason.includes("session durat")));
         if (isExpired && !isUserStopping) {
-          log("⚡ Session duration limit reached. Auto-reconnecting...");
+          isReconnecting = true;
+          log("⚡ Gemini session duration limit reached. Auto-reconnecting while preserving memory...");
           setTimeout(() => {
             connectWebSocket(apiKey);
           }, 1000);
@@ -514,6 +543,7 @@
     // Stop Button reloads the page for a clean reset
     document.getElementById("stopBtn").onclick = () => {
       isUserStopping = true;
+      conversationHistory = [];
       stopInspection();
       window.location.reload();
     };
@@ -523,6 +553,7 @@
       const text = msgInput.value.trim();
       if (text) {
         log(`You typed: ${text}`);
+        recordHistory("User", text);
         sendTextMessageDirect(text);
         msgInput.value = "";
       }
@@ -534,6 +565,7 @@
         const text = msgInput.value.trim();
         if (text) {
           log(`You typed: ${text}`);
+          recordHistory("User", text);
           sendTextMessageDirect(text);
           msgInput.value = "";
         }
@@ -661,6 +693,9 @@
       if (!parts) return;
 
       for (const part of parts) {
+        if (part.text) {
+          recordHistory("Gemini", part.text);
+        }
         if (part.inlineData && part.inlineData.mimeType.startsWith("audio/pcm")) {
           log("AI is speaking...");
           playAudioChunk(part.inlineData.data);
@@ -734,6 +769,7 @@
       document.getElementById("status").innerText = "Status: Stopped";
       document.getElementById("startBtn").disabled = false;
       document.getElementById("stopBtn").disabled = true;
+      document.getElementById("mediaSource").disabled = false;
       
       document.getElementById("userMsg").disabled = true;
       document.getElementById("sendBtn").disabled = true;
