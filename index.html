@@ -211,6 +211,9 @@
     <video id="webcam" autoplay playsinline muted></video>
   </div>
 
+  <!-- Hidden HTML5 Audio Element to force native smartphone Loudspeaker routing -->
+  <audio id="phoneLoudspeaker" autoplay playsinline></audio>
+
   <div class="controls">
     <!-- Media Source, FPS & Loudspeaker Row -->
     <div class="row">
@@ -286,11 +289,12 @@
     let videoStream = null;
     let audioStream = null;
     let video = document.getElementById("webcam");
+    let speakerAudioEl = document.getElementById("phoneLoudspeaker");
     let imageInterval = null;
     let micAudioContext = null;
     let playAudioContext = null;
-    let speakerGainNode = null;
-    let isLoudspeaker = true; // Loudspeaker active by default
+    let mediaStreamDest = null;
+    let isLoudspeaker = true;
     let nextStartTime = 0;
     let isUserStopping = false;
     let isReconnecting = false;
@@ -364,7 +368,7 @@
       document.getElementById("timerDisplay").innerText = "00:00";
     }
 
-    // Loudspeaker Toggle Button Handler
+    // Phone Loudspeaker Router Toggle
     document.getElementById("speakerBtn").onclick = async () => {
       isLoudspeaker = !isLoudspeaker;
       const btn = document.getElementById("speakerBtn");
@@ -372,25 +376,26 @@
       if (isLoudspeaker) {
         btn.innerText = "🔊 Speaker";
         btn.classList.remove("off");
-        if (speakerGainNode) speakerGainNode.gain.value = 2.5; // Boosted Loudspeaker volume
-        log("Loudspeaker mode active (Volume Boost 2.5x).");
+        log("Routed output to Smartphone Loudspeaker.");
+        if (speakerAudioEl && speakerAudioEl.paused) {
+          speakerAudioEl.play().catch(() => {});
+        }
       } else {
         btn.innerText = "🔈 Normal";
         btn.classList.add("off");
-        if (speakerGainNode) speakerGainNode.gain.value = 1.0; // Normal volume
-        log("Normal earpiece speaker mode active.");
+        log("Routed output to Normal audio channel.");
       }
 
-      // Route audio via Native Media Output API if supported
+      // Route via browser Audio Output Selection API if available
       if (navigator.mediaDevices && navigator.mediaDevices.selectAudioOutput) {
         try {
           const audioDevice = await navigator.mediaDevices.selectAudioOutput();
-          if (playAudioContext && typeof playAudioContext.setSinkId === 'function') {
-            await playAudioContext.setSinkId(audioDevice.deviceId);
-            log(`Audio output routed to device: ${audioDevice.label}`);
+          if (speakerAudioEl && typeof speakerAudioEl.setSinkId === 'function') {
+            await speakerAudioEl.setSinkId(audioDevice.deviceId);
+            log(`Audio output sink: ${audioDevice.label}`);
           }
         } catch (e) {
-          log("Native speaker selector: " + e.message);
+          log("Audio Output Router: " + e.message);
         }
       }
     };
@@ -549,15 +554,16 @@
         video.srcObject = videoStream;
         log(`${mediaType === 'screen' ? 'Screen Share' : 'Camera'} & Microphone active!`);
 
-        // Initialize Audio Playback Context with Volume Gain Node
+        // Initialize Audio Playback & Route to Smartphone Loudspeaker Audio Pipeline
         playAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
         if (playAudioContext.state === "suspended") {
           await playAudioContext.resume();
         }
 
-        speakerGainNode = playAudioContext.createGain();
-        speakerGainNode.gain.value = isLoudspeaker ? 2.5 : 1.0;
-        speakerGainNode.connect(playAudioContext.destination);
+        // Pipe Web Audio through MediaStreamDestination -> HTML5 Audio Element (Forces mobile loudspeaker routing)
+        mediaStreamDest = playAudioContext.createMediaStreamDestination();
+        speakerAudioEl.srcObject = mediaStreamDest.stream;
+        speakerAudioEl.play().catch(() => {});
 
         connectWebSocket(apiKey);
 
@@ -574,7 +580,7 @@
 
       ws.onopen = () => {
         log("WebSocket Connected!");
-        document.getElementById("status").innerText = "Status: Live Assistant Active";
+        document.getElementById("status").innerText = "Status: MAX Active";
         document.getElementById("startBtn").disabled = true;
         document.getElementById("stopBtn").disabled = false;
         
@@ -585,6 +591,7 @@
           startTimer();
         }
 
+        // YOUR REVISED SYSTEM PROMPT INTEGRATED EXACTLY
         let systemPromptText = "You are an intelligent, live human, your name is MAX. You can see through the camera feed or shared screen and listen to the microphone in real time. You can read any persons mind, analyze facial expressions, micro-expressions, body language, tone of voice, and behavioral cues to provide insights into mood, intent, and state of mind. You can answer questions, analyze objects, documents, software, or scenes, give advice, troubleshoot, read text, or converse naturally on ANY topic the user presents. Note, Stop if user says you to stop, hold or wait. Alway be open, talk short with direct to the main points only, be unfiltered, and uncensored.";
 
         if (conversationHistory.length > 0) {
@@ -623,12 +630,12 @@
 
         setTimeout(() => {
           if (isReconnecting) {
-            log("Asking AI to seamlessly resume conversation...");
+            log("Asking MAX to seamlessly resume conversation...");
             sendTextMessageDirect("Session auto-reconnected. Resume our conversation seamlessly from where we left off!");
             isReconnecting = false;
           } else {
-            log("Asking AI to greet you...");
-            sendTextMessageDirect("Hey! Say hello to me casually and let me know you're ready!");
+            log("Asking MAX to greet you...");
+            sendTextMessageDirect("Hey MAX! Say hello to me casually and let me know you're ready!");
           }
         }, 600);
       };
@@ -770,7 +777,7 @@
 
         const pcm16 = new Int16Array(downsampled.length);
         for (let i = 0; i < downsampled.length; i++) {
-          let sample = downsampled[i] * 1.8;
+          let sample = downsampled[i] * 1.2; // Natural clear gain
           let clamped = Math.max(-1, Math.min(1, sample));
           pcm16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7FFF;
         }
@@ -814,7 +821,7 @@
 
     function handleServerResponse(response) {
       if (response.setupComplete) {
-        log("Live Assistant Ready!");
+        log("MAX Active & Ready!");
         return;
       }
 
@@ -839,7 +846,7 @@
             currentTurnText += part.text;
           }
           if (part.inlineData && part.inlineData.mimeType.startsWith("audio/pcm")) {
-            log("AI is speaking...");
+            log("MAX is speaking...");
             playAudioChunk(part.inlineData.data);
           }
         }
@@ -847,7 +854,7 @@
 
       if (response.serverContent?.turnComplete) {
         if (currentTurnText.trim().length > 0) {
-          recordHistory("Gemini", currentTurnText);
+          recordHistory("MAX", currentTurnText);
           currentTurnText = "";
         }
       }
@@ -878,9 +885,9 @@
       const source = playAudioContext.createBufferSource();
       source.buffer = buffer;
 
-      // Connect to Volume Boost Gain Node
-      if (speakerGainNode) {
-        source.connect(speakerGainNode);
+      // Connect to MediaStreamDestination (Natural Mobile Loudspeaker Output Route)
+      if (mediaStreamDest) {
+        source.connect(mediaStreamDest);
       } else {
         source.connect(playAudioContext.destination);
       }
