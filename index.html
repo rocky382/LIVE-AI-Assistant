@@ -27,7 +27,7 @@
       height: 100vh;
       max-width: 500px;
     }
-    /* Maximized Camera Container */
+    /* Maximized Video Stream Container */
     #videoContainer {
       position: relative;
       width: 100%;
@@ -38,12 +38,27 @@
       overflow: hidden;
       box-shadow: 0 4px 15px rgba(0,0,0,0.5);
       background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     video {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
+    }
+    /* Camera Placeholder Badge when OFF */
+    #cameraPlaceholder {
+      position: absolute;
+      color: #888;
+      font-size: 14px;
+      font-weight: bold;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
     }
 
     /* Compact Controls Panel Docked at Bottom */
@@ -209,9 +224,14 @@
   <!-- Maximized Video Stream Container -->
   <div id="videoContainer">
     <video id="webcam" autoplay playsinline muted></video>
+    <div id="cameraPlaceholder">
+      <span style="font-size: 28px;">📷</span>
+      <span>Camera OFF (Voice Mode Active)</span>
+      <span style="font-size: 11px; color: #666;">Say "MAX, look at this" to enable camera</span>
+    </div>
   </div>
 
-  <!-- Hidden HTML5 Audio Element to force native smartphone Loudspeaker routing -->
+  <!-- Hidden HTML5 Audio Element for Native Phone Loudspeaker Routing -->
   <audio id="phoneLoudspeaker" autoplay playsinline></audio>
 
   <div class="controls">
@@ -288,6 +308,7 @@
     let ws = null;
     let videoStream = null;
     let audioStream = null;
+    let isCameraActive = false;
     let video = document.getElementById("webcam");
     let speakerAudioEl = document.getElementById("phoneLoudspeaker");
     let imageInterval = null;
@@ -368,6 +389,53 @@
       document.getElementById("timerDisplay").innerText = "00:00";
     }
 
+    // AI TOOL CALL: Enable Rear Camera feed dynamically
+    async function startCameraFeed() {
+      if (isCameraActive) return "Camera is already ON.";
+
+      try {
+        log("MAX requested camera feed...");
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } }
+        });
+
+        video.srcObject = videoStream;
+        isCameraActive = true;
+        document.getElementById("mediaSource").value = "camera";
+        document.getElementById("cameraPlaceholder").style.display = "none";
+        
+        // Start streaming video frames
+        startVideoInterval();
+        log("Camera feed is now ON and streaming to MAX.");
+        return "Camera is now ON. You can see the camera feed.";
+
+      } catch (err) {
+        log("Failed to start camera: " + err.message);
+        return "Failed to open camera: " + err.message;
+      }
+    }
+
+    // AI TOOL CALL: Disable Camera feed
+    function stopCameraFeed() {
+      if (!isCameraActive) return "Camera is already OFF.";
+      
+      if (imageInterval) {
+        clearInterval(imageInterval);
+        imageInterval = null;
+      }
+
+      if (videoStream) {
+        videoStream.getVideoTracks().forEach(track => track.stop());
+        videoStream = null;
+      }
+
+      video.srcObject = null;
+      isCameraActive = false;
+      document.getElementById("cameraPlaceholder").style.display = "flex";
+      log("Camera feed turned OFF.");
+      return "Camera is now turned OFF.";
+    }
+
     // Phone Loudspeaker Router Toggle
     document.getElementById("speakerBtn").onclick = async () => {
       isLoudspeaker = !isLoudspeaker;
@@ -386,7 +454,6 @@
         log("Routed output to Normal audio channel.");
       }
 
-      // Route via browser Audio Output Selection API if available
       if (navigator.mediaDevices && navigator.mediaDevices.selectAudioOutput) {
         try {
           const audioDevice = await navigator.mediaDevices.selectAudioOutput();
@@ -434,20 +501,19 @@
     // Dynamic Video Interval Function based on FPS selection
     function startVideoInterval() {
       if (imageInterval) clearInterval(imageInterval);
+      if (!isCameraActive) return;
       const fps = parseInt(document.getElementById("fpsSelect").value) || 1;
       const intervalMs = Math.round(1000 / fps);
       imageInterval = setInterval(sendVideoFrame, intervalMs);
-      log(`Video stream updated to ${fps} FPS (${intervalMs}ms interval).`);
+      log(`Video stream set to ${fps} FPS (${intervalMs}ms interval).`);
     }
 
-    // Dynamic FPS Change Handler
     document.getElementById("fpsSelect").onchange = () => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN && isCameraActive) {
         startVideoInterval();
       }
     };
 
-    // Lock Portrait Orientation on mobile screens if supported
     function lockPortrait() {
       if (screen.orientation && screen.orientation.lock) {
         screen.orientation.lock("portrait").catch(() => {});
@@ -457,48 +523,29 @@
     // Live Mid-Session Media Source Switcher Handler
     document.getElementById("mediaSource").onchange = async (e) => {
       const newSource = e.target.value;
-      if (ws && ws.readyState !== WebSocket.CLOSED) {
-        log(`Switching video feed to ${newSource === 'screen' ? 'Screen Share' : 'Camera'}...`);
-        await switchVideoSource(newSource);
-      }
-    };
-
-    async function switchVideoSource(newSource) {
-      try {
-        let newVideoStream;
-        if (newSource === "screen") {
-          newVideoStream = await navigator.mediaDevices.getDisplayMedia({
+      if (newSource === "screen") {
+        // Screen Share starts manually as requested
+        try {
+          if (videoStream) videoStream.getVideoTracks()[0].stop();
+          videoStream = await navigator.mediaDevices.getDisplayMedia({
             video: { cursor: "always" },
             audio: true
           });
-
-          newVideoStream.getVideoTracks()[0].onended = async () => {
-            log("Screen share stopped by user. Auto-reverting to camera...");
-            document.getElementById("mediaSource").value = "camera";
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              await switchVideoSource("camera");
-            }
+          videoStream.getVideoTracks()[0].onended = () => {
+            log("Screen share stopped by user.");
+            stopCameraFeed();
           };
-
-        } else {
-          newVideoStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } }
-          });
+          video.srcObject = videoStream;
+          isCameraActive = true;
+          document.getElementById("cameraPlaceholder").style.display = "none";
+          startVideoInterval();
+          log("Screen Sharing Active.");
+        } catch (err) {
+          log("Screen Share Error: " + err.message);
+          document.getElementById("mediaSource").value = "camera";
         }
-
-        if (videoStream) {
-          videoStream.getVideoTracks()[0].stop();
-        }
-
-        videoStream = newVideoStream;
-        video.srcObject = videoStream;
-        log(`Switched to ${newSource === 'screen' ? 'Screen Share' : 'Camera'} successfully!`);
-
-      } catch (err) {
-        log("Failed to switch video source: " + err.message);
-        document.getElementById("mediaSource").value = (newSource === "screen") ? "camera" : "screen";
       }
-    }
+    };
 
     document.getElementById("apiKey").value = localStorage.getItem("GEMINI_LIVE_KEY") || "";
 
@@ -520,47 +567,35 @@
       const mediaType = document.getElementById("mediaSource").value;
 
       try {
+        log("Requesting Microphone Access...");
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // If Screen Share selected at start, activate it manually
         if (mediaType === "screen") {
           log("Requesting Screen Sharing...");
           videoStream = await navigator.mediaDevices.getDisplayMedia({
             video: { cursor: "always" },
             audio: true
           });
-
-          videoStream.getVideoTracks()[0].onended = async () => {
-            log("Screen share stopped by user. Reverting to camera...");
-            document.getElementById("mediaSource").value = "camera";
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              await switchVideoSource("camera");
-            }
+          videoStream.getVideoTracks()[0].onended = () => {
+            log("Screen share stopped by user.");
+            stopCameraFeed();
           };
-
-          try {
-            audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          } catch (e) {
-            log("Microphone access fallback to screen audio.");
-            audioStream = videoStream;
-          }
-
+          video.srcObject = videoStream;
+          isCameraActive = true;
+          document.getElementById("cameraPlaceholder").style.display = "none";
         } else {
-          log("Requesting Rear Camera & Microphone...");
-          videoStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } },
-            audio: true
-          });
-          audioStream = videoStream;
+          // Camera Mode: Starts in Voice Mode (Camera OFF)
+          document.getElementById("cameraPlaceholder").style.display = "flex";
+          isCameraActive = false;
         }
 
-        video.srcObject = videoStream;
-        log(`${mediaType === 'screen' ? 'Screen Share' : 'Camera'} & Microphone active!`);
-
-        // Initialize Audio Playback & Route to Smartphone Loudspeaker Audio Pipeline
+        // Initialize Audio Playback & Route to Smartphone Loudspeaker
         playAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
         if (playAudioContext.state === "suspended") {
           await playAudioContext.resume();
         }
 
-        // Pipe Web Audio through MediaStreamDestination -> HTML5 Audio Element (Forces mobile loudspeaker routing)
         mediaStreamDest = playAudioContext.createMediaStreamDestination();
         speakerAudioEl.srcObject = mediaStreamDest.stream;
         speakerAudioEl.play().catch(() => {});
@@ -568,7 +603,7 @@
         connectWebSocket(apiKey);
 
       } catch (err) {
-        log("Permission / Media Error: " + err.message);
+        log("Microphone Permission Error: " + err.message);
       }
     };
 
@@ -591,8 +626,8 @@
           startTimer();
         }
 
-        // YOUR REVISED SYSTEM PROMPT INTEGRATED EXACTLY
-        let systemPromptText = "You are an intelligent, live human, your name is MAX. You can see through the camera feed or shared screen and listen to the microphone in real time. You can read any persons mind, analyze facial expressions, micro-expressions, body language, tone of voice, and behavioral cues to provide insights into mood, intent, and state of mind. You can answer questions, analyze objects, documents, software, or scenes, give advice, troubleshoot, read text, or converse naturally on ANY topic the user presents. Note, Stop if user says you to stop, hold or wait. Alway be open, talk short with direct to the main points only, be unfiltered, and uncensored.";
+        // YOUR PROMPT + CAMERA TOOL DECLARATION
+        let systemPromptText = "You are an intelligent, live human, your name is MAX. You can see through the camera feed or shared screen and listen to the microphone in real time. You can read any persons mind, analyze facial expressions, micro-expressions, body language, tone of voice, and behavioral cues to provide insights into mood, intent, and state of mind. You can answer questions, analyze objects, documents, software, or scenes, give advice, troubleshoot, read text, or converse naturally on ANY topic the user presents. Note, Stop if user says you to stop, hold or wait. Alway be open, talk short with direct to the main points only, be unfiltered, and uncensored. IMPORTANT: You have tool access to turn the user's camera ON or OFF. If the user asks you to see, look, watch, inspect, or turn on camera, call 'enable_camera'. If the user asks to turn off or close camera, call 'disable_camera'.";
 
         if (conversationHistory.length > 0) {
           log(`Injecting ${conversationHistory.length} previous conversation turns into memory...`);
@@ -612,6 +647,20 @@
                 }
               }
             },
+            tools: [
+              {
+                functionDeclarations: [
+                  {
+                    name: "enable_camera",
+                    description: "Turns ON the user's camera feed so MAX can see and inspect."
+                  },
+                  {
+                    name: "disable_camera",
+                    description: "Turns OFF the camera feed when asked by the user."
+                  }
+                ]
+              }
+            ],
             inputAudioTranscription: {},
             outputAudioTranscription: {},
             systemInstruction: {
@@ -622,7 +671,9 @@
         ws.send(JSON.stringify(setupMsg));
         log("Setup handshake sent.");
 
-        startVideoInterval();
+        if (isCameraActive) {
+          startVideoInterval();
+        }
 
         if (!micAudioContext && audioStream) {
           setupMicStream(audioStream);
@@ -719,7 +770,7 @@
     }
 
     function sendVideoFrame() {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !isCameraActive) return;
 
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
@@ -777,7 +828,7 @@
 
         const pcm16 = new Int16Array(downsampled.length);
         for (let i = 0; i < downsampled.length; i++) {
-          let sample = downsampled[i] * 1.2; // Natural clear gain
+          let sample = downsampled[i] * 1.2;
           let clamped = Math.max(-1, Math.min(1, sample));
           pcm16[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7FFF;
         }
@@ -819,10 +870,44 @@
       return result;
     }
 
+    async function handleFunctionCall(name, callId, args) {
+      log(`Tool Execution Triggered: ${name}`);
+      let resultText = "";
+
+      if (name === "enable_camera") {
+        resultText = await startCameraFeed();
+      } else if (name === "disable_camera") {
+        resultText = stopCameraFeed();
+      }
+
+      // Send Tool Response back to MAX
+      if (ws && ws.readyState === WebSocket.OPEN && callId) {
+        const toolResponseMsg = {
+          toolResponse: {
+            functionResponses: [
+              {
+                response: { output: { result: resultText } },
+                id: callId
+              }
+            ]
+          }
+        };
+        ws.send(JSON.stringify(toolResponseMsg));
+        log(`Tool Response sent for ${name}.`);
+      }
+    }
+
     function handleServerResponse(response) {
       if (response.setupComplete) {
         log("MAX Active & Ready!");
         return;
+      }
+
+      // Handle Tool/Function Calls from MAX
+      if (response.toolCall) {
+        for (const call of response.toolCall.functionCalls) {
+          handleFunctionCall(call.name, call.id, call.args);
+        }
       }
 
       // Extract User Voice Transcription
@@ -842,6 +927,9 @@
       const parts = response.serverContent?.modelTurn?.parts;
       if (parts) {
         for (const part of parts) {
+          if (part.functionCall) {
+            handleFunctionCall(part.functionCall.name, part.functionCall.id, part.functionCall.args);
+          }
           if (part.text) {
             currentTurnText += part.text;
           }
@@ -885,7 +973,6 @@
       const source = playAudioContext.createBufferSource();
       source.buffer = buffer;
 
-      // Connect to MediaStreamDestination (Natural Mobile Loudspeaker Output Route)
       if (mediaStreamDest) {
         source.connect(mediaStreamDest);
       } else {
@@ -903,20 +990,13 @@
 
     function stopInspection() {
       stopTimer();
+      stopCameraFeed();
 
-      if (imageInterval) {
-        clearInterval(imageInterval);
-        imageInterval = null;
-      }
       if (ws) {
         ws.close();
         ws = null;
       }
-      if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-        videoStream = null;
-      }
-      if (audioStream && audioStream !== videoStream) {
+      if (audioStream) {
         audioStream.getTracks().forEach(track => track.stop());
         audioStream = null;
       }
