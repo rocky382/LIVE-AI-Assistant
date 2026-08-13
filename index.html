@@ -406,6 +406,8 @@
     let nextStartTime = 0;
     let isUserStopping = false;
     let isReconnecting = false;
+    let wakeLock = null;
+    let silentAudioEl = null;
 
     // Current turn text accumulator
     let currentTurnText = "";
@@ -429,6 +431,84 @@
       logDiv.scrollTop = logDiv.scrollHeight;
       console.log(msg);
     }
+
+    // Request Screen Wake Lock to prevent iPhone screen sleep
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          log("Screen Wake Lock active (prevents iPhone display sleep).");
+          wakeLock.addEventListener('release', () => {
+            log("Screen Wake Lock released.");
+          });
+        }
+      } catch (err) {
+        log("Wake Lock request failed: " + err.message);
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock !== null) {
+        wakeLock.release().catch(() => {});
+        wakeLock = null;
+      }
+    }
+
+    // Enable MediaSession & Background Audio handling for iOS
+    function enableiOSBackgroundAudio() {
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: "Live AI Session",
+          artist: "ROCKY AI",
+          album: "Live Stream"
+        });
+        navigator.mediaSession.playbackState = "playing";
+
+        navigator.mediaSession.setActionHandler('play', async () => {
+          if (playAudioContext && playAudioContext.state === "suspended") {
+            await playAudioContext.resume();
+          }
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {});
+      }
+
+      // Loop silent audio to keep iOS Web Audio priority active
+      if (!silentAudioEl) {
+        silentAudioEl = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+        silentAudioEl.loop = true;
+      }
+      silentAudioEl.play().catch(() => {});
+    }
+
+    // Auto recovery when iPhone screen unlocks or tab focuses
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState === "visible") {
+        log("iPhone Tab / Screen resumed.");
+        
+        if (ws && ws.readyState === WebSocket.OPEN && wakeLock === null) {
+          requestWakeLock();
+        }
+
+        if (playAudioContext && playAudioContext.state === "suspended") {
+          await playAudioContext.resume();
+          log("AudioContext resumed on screen wake.");
+        }
+
+        if (micAudioContext && micAudioContext.state === "suspended") {
+          await micAudioContext.resume();
+        }
+
+        // Auto restore WebSocket if closed while screen was off
+        if ((!ws || ws.readyState === WebSocket.CLOSED) && !isUserStopping) {
+          const apiKey = localStorage.getItem("GEMINI_LIVE_KEY");
+          if (apiKey) {
+            log("Restoring WebSocket connection after wake...");
+            isReconnecting = true;
+            connectWebSocket(apiKey);
+          }
+        }
+      }
+    });
 
     function recordHistory(sender, text) {
       if (!text) return;
@@ -462,7 +542,6 @@
 
       if (foundNew) {
         renderCodePanel();
-        // Auto open Code panel when code is generated & scroll down
         const codePanel = document.getElementById("codePanel");
         if (codePanel) {
           document.getElementById("historyPanel").style.display = "none";
@@ -475,7 +554,6 @@
       }
     }
 
-    // Render Code Snippets in the Code Panel with Copy Button shifted to the BOTTOM
     function renderCodePanel() {
       const content = document.getElementById("codeContent");
       const codePanel = document.getElementById("codePanel");
@@ -508,13 +586,11 @@
 
       content.innerHTML = html;
 
-      // Ensure panel automatically scrolls down to the newest code snippet
       setTimeout(() => {
         if (codePanel) codePanel.scrollTop = codePanel.scrollHeight;
       }, 50);
     }
 
-    // Copy Code Snippet with Fallback support for all browsers/webviews
     window.copyCodeSnippet = function(index, btnEl) {
       if (!detectedCodeBlocks[index]) return;
       const textToCopy = detectedCodeBlocks[index].code;
@@ -553,7 +629,6 @@
       document.body.removeChild(textArea);
     }
 
-    // Render History Panel with AUTO-SCROLL to bottom
     function renderHistoryPanel() {
       const content = document.getElementById("historyContent");
       if (!content) return;
@@ -598,7 +673,6 @@
       document.getElementById("timerDisplay").innerText = "00:00";
     }
 
-    // AI TOOL CALL: Enable Rear Camera feed dynamically
     async function startCameraFeed() {
       if (isCameraActive) return "Camera is already ON.";
 
@@ -623,7 +697,6 @@
       }
     }
 
-    // AI TOOL CALL: Disable Camera feed
     function stopCameraFeed() {
       if (!isCameraActive) return "Camera is already OFF.";
       
@@ -644,7 +717,6 @@
       return "Camera is now turned OFF.";
     }
 
-    // Toggle Chat History Panel
     document.getElementById("toggleHistoryBtn").onclick = () => {
       const historyPanel = document.getElementById("historyPanel");
       document.getElementById("codePanel").style.display = "none";
@@ -662,7 +734,6 @@
       document.getElementById("historyPanel").style.display = "none";
     };
 
-    // Toggle Code Display Panel
     document.getElementById("toggleCodeBtn").onclick = () => {
       const codePanel = document.getElementById("codePanel");
       document.getElementById("historyPanel").style.display = "none";
@@ -680,7 +751,6 @@
       document.getElementById("codePanel").style.display = "none";
     };
 
-    // Toggle Technical Debug Logs Panel
     document.getElementById("toggleLogsBtn").onclick = () => {
       const logPanel = document.getElementById("logPanel");
       document.getElementById("historyPanel").style.display = "none";
@@ -693,7 +763,6 @@
       }
     };
 
-    // Dynamic Video Interval Function based on FPS selection
     function startVideoInterval() {
       if (imageInterval) clearInterval(imageInterval);
       if (!isCameraActive) return;
@@ -715,7 +784,6 @@
       }
     }
 
-    // Live Mid-Session Media Source Switcher Handler
     document.getElementById("mediaSource").onchange = async (e) => {
       const newSource = e.target.value;
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -761,6 +829,8 @@
       renderCodePanel();
 
       lockPortrait();
+      requestWakeLock();
+      enableiOSBackgroundAudio();
 
       const mediaType = document.getElementById("mediaSource").value;
 
@@ -768,7 +838,6 @@
         log("Requesting Microphone Access...");
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-        // Prompt screen share permission ONLY IF selected when clicking Start
         if (mediaType === "screen") {
           log("Requesting Screen Sharing...");
           videoStream = await navigator.mediaDevices.getDisplayMedia({
@@ -787,7 +856,6 @@
           isCameraActive = false;
         }
 
-        // Initialize Audio Playback & Route to Smartphone Loudspeaker
         playAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
         if (playAudioContext.state === "suspended") {
           await playAudioContext.resume();
@@ -819,10 +887,7 @@
         document.getElementById("status").innerText = `Status: ${aiName} Active`;
         document.getElementById("startBtn").disabled = true;
         document.getElementById("stopBtn").disabled = false;
-        
-        // LOCK VOICE SELECTOR DURING LIVE SESSION
         document.getElementById("voiceSelect").disabled = true;
-
         document.getElementById("userMsg").disabled = false;
         document.getElementById("sendBtn").disabled = false;
 
@@ -921,7 +986,7 @@
         const isExpired = e.code === 1008 || (e.reason && (e.reason.includes("GoAway") || e.reason.includes("session durat")));
         if (isExpired && !isUserStopping) {
           isReconnecting = true;
-          log("⚡ Gemini session duration limit reached. Auto-reconnecting while preserving memory...");
+          log("⚡ Gemini session limit reached. Auto-reconnecting while preserving memory...");
           setTimeout(() => {
             connectWebSocket(apiKey);
           }, 1000);
@@ -938,7 +1003,6 @@
       };
     }
 
-    // Stop Button reloads the page for a clean reset
     document.getElementById("stopBtn").onclick = () => {
       isUserStopping = true;
       conversationHistory = [];
@@ -1209,6 +1273,11 @@
     function stopInspection() {
       stopTimer();
       stopCameraFeed();
+      releaseWakeLock();
+
+      if (silentAudioEl) {
+        silentAudioEl.pause();
+      }
 
       if (ws) {
         ws.close();
@@ -1231,10 +1300,7 @@
       document.getElementById("startBtn").disabled = false;
       document.getElementById("stopBtn").disabled = true;
       document.getElementById("mediaSource").disabled = false;
-      
-      // UNLOCK VOICE SELECTOR WHEN STOPPED
       document.getElementById("voiceSelect").disabled = false;
-
       document.getElementById("userMsg").disabled = true;
       document.getElementById("sendBtn").disabled = true;
       
