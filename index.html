@@ -369,7 +369,7 @@
   <!-- Developer Footer -->
   <div class="footer">Developed by ROCKY</div>
 
-  <!-- Chat History Panel (Hidden by default) -->
+  <!-- Chat History Panel -->
   <div id="historyPanel">
     <div style="font-weight: bold; margin-bottom: 6px; color: #4dabf7; display: flex; justify-content: space-between;">
       <span>Conversation History</span>
@@ -378,7 +378,7 @@
     <div id="historyContent"><span style="color:#888; font-style:italic;">No conversation history yet...</span></div>
   </div>
 
-  <!-- Code Display Panel (Hidden by default) -->
+  <!-- Code Display Panel -->
   <div id="codePanel">
     <div style="font-weight: bold; margin-bottom: 6px; color: #f59f00; display: flex; justify-content: space-between;">
       <span>Generated Code Snippets</span>
@@ -387,7 +387,7 @@
     <div id="codeContent"><span style="color:#888; font-style:italic;">No code snippets generated yet...</span></div>
   </div>
 
-  <!-- Debug Logs Panel (Hidden by default) -->
+  <!-- Debug Logs Panel -->
   <div id="logPanel">Logs initialized...</div>
 
   <script>
@@ -403,22 +403,20 @@
     let micAudioContext = null;
     let playAudioContext = null;
     let mediaStreamDest = null;
+    
+    // Smooth Jitter Buffer audio tracking
     let nextStartTime = 0;
+    const JITTER_BUFFER_SEC = 0.10; // 100ms safety lookahead buffer
+    let activeAudioSources = [];
+
     let isUserStopping = false;
     let isReconnecting = false;
     let wakeLock = null;
     let silentAudioEl = null;
 
-    // Current turn text accumulator
     let currentTurnText = "";
-
-    // Conversation Memory Array across reconnects
     let conversationHistory = [];
-
-    // Generated Code Blocks Storage
     let detectedCodeBlocks = [];
-
-    // Timer Variables
     let sessionTimer = null;
     let timerStartTime = 0;
 
@@ -432,12 +430,11 @@
       console.log(msg);
     }
 
-    // Request Screen Wake Lock to prevent iPhone screen sleep
     async function requestWakeLock() {
       try {
         if ('wakeLock' in navigator) {
           wakeLock = await navigator.wakeLock.request('screen');
-          log("Screen Wake Lock active (prevents iPhone display sleep).");
+          log("Screen Wake Lock active.");
           wakeLock.addEventListener('release', () => {
             log("Screen Wake Lock released.");
           });
@@ -454,13 +451,12 @@
       }
     }
 
-    // Enable MediaSession & Background Audio handling for iOS
     function enableiOSBackgroundAudio() {
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: "Live AI Session",
           artist: "ROCKY AI",
-          album: "Live Stream"
+          album: "Live Voice Stream"
         });
         navigator.mediaSession.playbackState = "playing";
 
@@ -472,7 +468,6 @@
         navigator.mediaSession.setActionHandler('pause', () => {});
       }
 
-      // Loop silent audio to keep iOS Web Audio priority active
       if (!silentAudioEl) {
         silentAudioEl = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
         silentAudioEl.loop = true;
@@ -480,10 +475,9 @@
       silentAudioEl.play().catch(() => {});
     }
 
-    // Auto recovery when iPhone screen unlocks or tab focuses
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible") {
-        log("iPhone Tab / Screen resumed.");
+        log("App focused / Screen ON.");
         
         if (ws && ws.readyState === WebSocket.OPEN && wakeLock === null) {
           requestWakeLock();
@@ -491,14 +485,12 @@
 
         if (playAudioContext && playAudioContext.state === "suspended") {
           await playAudioContext.resume();
-          log("AudioContext resumed on screen wake.");
         }
 
         if (micAudioContext && micAudioContext.state === "suspended") {
           await micAudioContext.resume();
         }
 
-        // Auto restore WebSocket if closed while screen was off
         if ((!ws || ws.readyState === WebSocket.CLOSED) && !isUserStopping) {
           const apiKey = localStorage.getItem("GEMINI_LIVE_KEY");
           if (apiKey) {
@@ -519,7 +511,6 @@
       renderHistoryPanel();
     }
 
-    // Extract code snippets wrapped in backticks (```) automatically
     function extractAndStoreCode(text) {
       if (!text) return;
       const codeRegex = /```(?:([a-zA-Z0-9_+-]+)\n)?([\s\S]*?)```/g;
@@ -856,7 +847,8 @@
           isCameraActive = false;
         }
 
-        playAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+        // Initialize AudioContext using native hardware sample rate to eliminate crackles
+        playAudioContext = new (window.AudioContext || window.webkitAudioContext)();
         if (playAudioContext.state === "suspended") {
           await playAudioContext.resume();
         }
@@ -1048,9 +1040,11 @@
     function sendVideoFrame() {
       if (!ws || ws.readyState !== WebSocket.OPEN || !isCameraActive) return;
 
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const targetWidth = 480;
+      const targetHeight = 360;
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
       const base64Image = canvas.toDataURL("image/jpeg", 0.4).split(",")[1];
 
@@ -1181,6 +1175,12 @@
         return;
       }
 
+      // If user interrupted the model, clear pending queued audio
+      if (response.serverContent?.interrupted) {
+        log("Interruption detected, clearing audio queue.");
+        clearAudioQueue();
+      }
+
       if (response.toolCall) {
         for (const call of response.toolCall.functionCalls) {
           handleFunctionCall(call.name, call.id, call.args);
@@ -1215,7 +1215,6 @@
             }
           }
           if (part.inlineData && part.inlineData.mimeType.startsWith("audio/pcm")) {
-            log(`${currentName} is speaking...`);
             playAudioChunk(part.inlineData.data);
           }
         }
@@ -1230,6 +1229,7 @@
       }
     }
 
+    // High-performance, anti-jitter audio chunk playback
     function playAudioChunk(base64Data) {
       if (!playAudioContext) return;
 
@@ -1237,9 +1237,11 @@
         playAudioContext.resume();
       }
 
+      // Decode base64 to 16-bit PCM Float32Array
       const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
       
@@ -1249,6 +1251,7 @@
         float32Array[i] = int16Array[i] / 32768.0;
       }
 
+      // Gemini Live uses 24000Hz PCM
       const buffer = playAudioContext.createBuffer(1, float32Array.length, 24000);
       buffer.getChannelData(0).set(float32Array);
 
@@ -1262,18 +1265,35 @@
       }
 
       const currentTime = playAudioContext.currentTime;
+
+      // Jitter Buffer: If audio runs dry or starting a fresh turn, schedule with 100ms lookahead
       if (nextStartTime < currentTime) {
-        nextStartTime = currentTime;
+        nextStartTime = currentTime + JITTER_BUFFER_SEC;
       }
 
       source.start(nextStartTime);
       nextStartTime += buffer.duration;
+
+      activeAudioSources.push(source);
+      source.onended = () => {
+        const idx = activeAudioSources.indexOf(source);
+        if (idx !== -1) activeAudioSources.splice(idx, 1);
+      };
+    }
+
+    function clearAudioQueue() {
+      for (const src of activeAudioSources) {
+        try { src.stop(); } catch (e) {}
+      }
+      activeAudioSources = [];
+      nextStartTime = 0;
     }
 
     function stopInspection() {
       stopTimer();
       stopCameraFeed();
       releaseWakeLock();
+      clearAudioQueue();
 
       if (silentAudioEl) {
         silentAudioEl.pause();
