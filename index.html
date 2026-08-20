@@ -2,44 +2,62 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
   <title>Live AI Assistant</title>
   <style>
-    * { box-sizing: border-box; }
-    html, body {
-      touch-action: manipulation;
-      -webkit-text-size-adjust: 100%;
-      overscroll-behavior: none;
-      user-select: none;
-      -webkit-user-select: none;
-      width: 100%;
-      height: 100%;
+    * { 
+      box-sizing: border-box; 
+      -webkit-tap-highlight-color: transparent;
     }
     
-    /* Allow Text Selection inside Inputs, Code Panels, History, and Logs */
+    html, body {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+      -webkit-text-size-adjust: 100%;
+      user-select: none;
+      -webkit-user-select: none;
+      background-color: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    /* Allow Text Selection only inside specific panels */
     input, #historyPanel, #logPanel, #codePanel, pre, code, .code-card-body, .hist-msg {
       user-select: text !important;
       -webkit-user-select: text !important;
     }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #121212;
-      color: #ffffff;
+    /* Main Fixed App Wrapper (Locks horizontal drift) */
+    #appWrapper {
+      width: 100%;
+      max-width: 500px;
+      height: 100%;
       margin: 0 auto;
       padding: 8px;
-      text-align: center;
       display: flex;
       flex-direction: column;
-      height: 100vh;
-      max-width: 500px;
+      overflow-x: hidden;
+      overflow-y: hidden;
+      position: relative;
     }
+
     /* Maximized Video Stream Container */
     #videoContainer {
       position: relative;
       width: 100%;
       flex: 1;
-      min-height: 250px;
+      min-height: 200px;
       margin: 0 0 8px 0;
       border-radius: 12px;
       overflow: hidden;
@@ -54,6 +72,7 @@
       height: 100%;
       object-fit: cover;
       display: block;
+      pointer-events: none;
     }
     /* Camera Placeholder Badge when OFF */
     #cameraPlaceholder {
@@ -71,39 +90,51 @@
     /* Compact Controls Panel Docked at Bottom */
     .controls {
       width: 100%;
-      padding: 10px;
+      padding: 8px 10px;
       background: #1e1e1e;
       border-radius: 10px;
       flex-shrink: 0;
+      overflow-x: hidden;
     }
     /* Input and Button Rows */
     .row {
       display: flex;
       gap: 6px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       align-items: center;
+      width: 100%;
     }
-    input, button, select {
-      padding: 10px 8px;
-      font-size: 13px;
+
+    /* CRUCIAL: 16px font-size prevents iOS Safari auto-zoom */
+    input, select {
+      font-size: 16px !important;
+      padding: 8px 6px;
       border-radius: 8px;
       border: 1px solid #333;
+      background: #2a2a2a;
+      color: #fff;
       touch-action: manipulation;
     }
-    input, select { background: #2a2a2a; color: #fff; flex: 1; }
+    input { flex: 1; min-width: 0; }
+    
     button {
+      font-size: 13px;
       font-weight: bold;
       border: none;
       cursor: pointer;
+      padding: 9px 8px;
+      border-radius: 8px;
       transition: opacity 0.2s;
       white-space: nowrap;
+      touch-action: manipulation;
     }
-    .flex-1 { flex: 1; }
-    .btn-chat { background-color: #1c7ed6; color: white; width: 65px; }
+
+    .flex-1 { flex: 1; min-width: 0; }
+    .btn-chat { background-color: #1c7ed6; color: white; width: 60px; }
     .btn-chat:hover { background-color: #228be6; }
-    .btn-code { background-color: #f59f00; color: white; width: 65px; }
+    .btn-code { background-color: #f59f00; color: white; width: 60px; }
     .btn-code:hover { background-color: #fcc419; }
-    .btn-logs { background-color: #495057; color: white; width: 65px; }
+    .btn-logs { background-color: #495057; color: white; width: 60px; }
     .btn-logs:hover { background-color: #6c757d; }
     
     /* Start, Stop & Timer Side-By-Side */
@@ -117,41 +148,44 @@
     .timer-badge {
       background: #2a2a2a;
       border: 1px solid #444;
-      padding: 8px 10px;
+      padding: 6px 8px;
       border-radius: 8px;
       font-family: monospace;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: bold;
       color: #ffeb3b;
-      min-width: 60px;
+      min-width: 55px;
       text-align: center;
+      flex-shrink: 0;
     }
 
     /* Chat Input Box Row */
-    .chat-box { display: flex; gap: 8px; margin-top: 8px; }
+    .chat-box { display: flex; gap: 6px; margin-top: 6px; width: 100%; }
     .chat-box input { margin: 0; }
     .chat-box button {
-      width: 70px;
+      width: 65px;
       background-color: #1c7ed6;
       color: white;
+      flex-shrink: 0;
     }
 
     /* Mic Meter */
     .meter-container {
-      margin-top: 6px;
+      margin-top: 5px;
       text-align: left;
+      width: 100%;
     }
     .meter-label {
       font-size: 11px;
       color: #aaa;
       display: flex;
       justify-content: space-between;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
     .meter-bg {
       background: #2a2a2a;
-      height: 8px;
-      border-radius: 4px;
+      height: 6px;
+      border-radius: 3px;
       overflow: hidden;
       border: 1px solid #444;
     }
@@ -164,14 +198,14 @@
     #status {
       font-weight: bold;
       color: #ffd43b;
-      margin-top: 6px;
+      margin-top: 4px;
       font-size: 12px;
     }
 
     /* Developer Footer Tag */
     .footer {
-      margin-top: 6px;
-      font-size: 12px;
+      margin-top: 4px;
+      font-size: 11px;
       color: #888;
       font-weight: bold;
       letter-spacing: 0.5px;
@@ -188,9 +222,9 @@
       font-size: 12px;
       height: 140px;
       overflow-y: auto;
+      overflow-x: hidden;
       width: 100%;
-      max-width: 500px;
-      margin: 6px auto 0 auto;
+      margin: 6px 0 0 0;
       border-radius: 8px;
       border: 1px solid #333;
       flex-shrink: 0;
@@ -202,6 +236,7 @@
       font-size: 12px;
       line-height: 1.3;
       word-wrap: break-word;
+      overflow-wrap: break-word;
     }
     .hist-msg.user { background: #005c4b; color: #fff; }
     .hist-msg.ai { background: #262d31; color: #fff; }
@@ -216,9 +251,9 @@
       font-size: 12px;
       height: 160px;
       overflow-y: auto;
+      overflow-x: hidden;
       width: 100%;
-      max-width: 500px;
-      margin: 6px auto 0 auto;
+      margin: 6px 0 0 0;
       border-radius: 8px;
       border: 1px solid #30363d;
       flex-shrink: 0;
@@ -244,11 +279,12 @@
     .code-card-body {
       padding: 8px;
       margin: 0;
-      font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+      font-family: Consolas, Monaco, "Andale Mono", monospace;
       font-size: 11px;
       line-height: 1.4;
       white-space: pre-wrap;
-      word-break: break-all;
+      word-break: break-word;
+      overflow-wrap: break-word;
       color: #7ee787;
       overflow-x: auto;
     }
@@ -285,112 +321,145 @@
       font-size: 11px;
       height: 110px;
       overflow-y: auto;
+      overflow-x: hidden;
       width: 100%;
-      max-width: 500px;
-      margin: 6px auto 0 auto;
+      margin: 6px 0 0 0;
       border-radius: 8px;
       border: 1px solid #333;
       flex-shrink: 0;
+      word-break: break-word;
     }
   </style>
 </head>
 <body>
 
-  <!-- Maximized Video Stream Container -->
-  <div id="videoContainer">
-    <video id="webcam" autoplay playsinline muted></video>
-    <div id="cameraPlaceholder">
-      <span style="font-size: 28px;">📷</span>
-      <span>Camera OFF (Voice Mode Active)</span>
-      <span style="font-size: 11px; color: #666;">Say "look at this" to enable camera</span>
-    </div>
-  </div>
-
-  <!-- Hidden HTML5 Audio Element for Native Phone Loudspeaker Routing -->
-  <audio id="phoneLoudspeaker" autoplay playsinline></audio>
-
-  <div class="controls">
-    <!-- Media Source, FPS & Voice Selector Row -->
-    <div class="row">
-      <select id="mediaSource" class="flex-1">
-        <option value="camera">📷 Rear Camera</option>
-        <option value="screen">🖥️ Screen Share</option>
-      </select>
-      
-      <select id="fpsSelect" style="width: 80px;">
-        <option value="1" selected>⚡ 1 FPS</option>
-        <option value="2">⚡ 2 FPS</option>
-        <option value="3">⚡ 3 FPS</option>
-        <option value="4">⚡ 4 FPS</option>
-        <option value="5">⚡ 5 FPS</option>
-      </select>
-
-      <select id="voiceSelect" style="width: 105px;">
-        <option value="Puck" selected>👦 MAX (M)</option>
-        <option value="Gacrux">👧 AVA (F)</option>
-      </select>
-    </div>
-
-    <!-- Start, Stop & Timer Side-By-Side -->
-    <div class="row">
-      <button id="startBtn" class="flex-1">▶ Start Live</button>
-      <button id="stopBtn" class="flex-1" disabled>⏹ Stop</button>
-      <div id="timerDisplay" class="timer-badge">00:00</div>
-    </div>
-
-    <!-- Chat Message Input Box -->
-    <div class="chat-box">
-      <input type="text" id="userMsg" placeholder="Type a message or question..." disabled>
-      <button id="sendBtn" disabled>Send</button>
-    </div>
-
-    <!-- Microphone Meter -->
-    <div class="meter-container">
-      <div class="meter-label">
-        <span>Mic Meter:</span>
-        <span id="micMeterValue">Silent</span>
-      </div>
-      <div class="meter-bg">
-        <div id="micMeter"></div>
+  <div id="appWrapper">
+    <!-- Maximized Video Stream Container -->
+    <div id="videoContainer">
+      <video id="webcam" autoplay playsinline muted></video>
+      <div id="cameraPlaceholder">
+        <span style="font-size: 28px;">📷</span>
+        <span>Camera OFF (Voice Mode Active)</span>
+        <span style="font-size: 11px; color: #666;">Say "look at this" to enable camera</span>
       </div>
     </div>
 
-    <div id="status">Status: Disconnected</div>
+    <!-- Hidden Audio Element for iOS Routing -->
+    <audio id="phoneLoudspeaker" autoplay playsinline></audio>
 
-    <!-- API Key + Chat History + Code + Log Toggle Button Row -->
-    <div class="row" style="margin-top: 10px; margin-bottom: 0;">
-      <input type="password" id="apiKey" placeholder="Paste API Key Here">
-      <button id="toggleHistoryBtn" class="btn-chat">💬 Chat</button>
-      <button id="toggleCodeBtn" class="btn-code">💻 Code</button>
-      <button id="toggleLogsBtn" class="btn-logs">📜 Logs</button>
+    <div class="controls">
+      <!-- Media Source, FPS & Voice Selector Row -->
+      <div class="row">
+        <select id="mediaSource" class="flex-1">
+          <option value="camera">📷 Rear Cam</option>
+          <option value="screen">🖥️ Screen</option>
+        </select>
+        
+        <select id="fpsSelect" style="width: 80px;">
+          <option value="1" selected>⚡ 1 FPS</option>
+          <option value="2">⚡ 2 FPS</option>
+          <option value="3">⚡ 3 FPS</option>
+          <option value="4">⚡ 4 FPS</option>
+          <option value="5">⚡ 5 FPS</option>
+        </select>
+
+        <select id="voiceSelect" style="width: 100px;">
+          <option value="Puck" selected>👦 MAX</option>
+          <option value="Gacrux">👧 AVA</option>
+        </select>
+      </div>
+
+      <!-- Start, Stop & Timer Side-By-Side -->
+      <div class="row">
+        <button id="startBtn" class="flex-1">▶ Start Live</button>
+        <button id="stopBtn" class="flex-1" disabled>⏹ Stop</button>
+        <div id="timerDisplay" class="timer-badge">00:00</div>
+      </div>
+
+      <!-- Chat Message Input Box -->
+      <div class="chat-box">
+        <input type="text" id="userMsg" placeholder="Type a message..." disabled>
+        <button id="sendBtn" disabled>Send</button>
+      </div>
+
+      <!-- Microphone Meter -->
+      <div class="meter-container">
+        <div class="meter-label">
+          <span>Mic Meter:</span>
+          <span id="micMeterValue">Silent</span>
+        </div>
+        <div class="meter-bg">
+          <div id="micMeter"></div>
+        </div>
+      </div>
+
+      <div id="status">Status: Disconnected</div>
+
+      <!-- API Key + Chat History + Code + Log Toggle Button Row -->
+      <div class="row" style="margin-top: 8px; margin-bottom: 0;">
+        <input type="password" id="apiKey" placeholder="API Key">
+        <button id="toggleHistoryBtn" class="btn-chat">💬 Chat</button>
+        <button id="toggleCodeBtn" class="btn-code">💻 Code</button>
+        <button id="toggleLogsBtn" class="btn-logs">📜 Logs</button>
+      </div>
     </div>
-  </div>
 
-  <!-- Developer Footer -->
-  <div class="footer">Developed by ROCKY</div>
+    <!-- Developer Footer -->
+    <div class="footer">Developed by ROCKY</div>
 
-  <!-- Chat History Panel -->
-  <div id="historyPanel">
-    <div style="font-weight: bold; margin-bottom: 6px; color: #4dabf7; display: flex; justify-content: space-between;">
-      <span>Conversation History</span>
-      <span id="closeHistory" style="cursor: pointer;">✖</span>
+    <!-- Chat History Panel -->
+    <div id="historyPanel">
+      <div style="font-weight: bold; margin-bottom: 6px; color: #4dabf7; display: flex; justify-content: space-between;">
+        <span>Conversation History</span>
+        <span id="closeHistory" style="cursor: pointer;">✖</span>
+      </div>
+      <div id="historyContent"><span style="color:#888; font-style:italic;">No conversation history yet...</span></div>
     </div>
-    <div id="historyContent"><span style="color:#888; font-style:italic;">No conversation history yet...</span></div>
-  </div>
 
-  <!-- Code Display Panel -->
-  <div id="codePanel">
-    <div style="font-weight: bold; margin-bottom: 6px; color: #f59f00; display: flex; justify-content: space-between;">
-      <span>Generated Code Snippets</span>
-      <span id="closeCode" style="cursor: pointer;">✖</span>
+    <!-- Code Display Panel -->
+    <div id="codePanel">
+      <div style="font-weight: bold; margin-bottom: 6px; color: #f59f00; display: flex; justify-content: space-between;">
+        <span>Generated Code Snippets</span>
+        <span id="closeCode" style="cursor: pointer;">✖</span>
+      </div>
+      <div id="codeContent"><span style="color:#888; font-style:italic;">No code snippets generated yet...</span></div>
     </div>
-    <div id="codeContent"><span style="color:#888; font-style:italic;">No code snippets generated yet...</span></div>
-  </div>
 
-  <!-- Debug Logs Panel -->
-  <div id="logPanel">Logs initialized...</div>
+    <!-- Debug Logs Panel -->
+    <div id="logPanel">Logs initialized...</div>
+  </div>
 
   <script>
+    /* =========================================================================
+       1. STRICT IOS ZOOM & HORIZONTAL DRIFT BLOCKERS
+       ========================================================================= */
+    // Prevent iOS Safari Gesture Zooming (Pinch)
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('gesturechange', (e) => e.preventDefault());
+    document.addEventListener('gestureend', (e) => e.preventDefault());
+
+    // Prevent Multi-Touch Pinch Zoom
+    document.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    // Prevent Double-Tap to Zoom on buttons / UI
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) {
+        if (!e.target.closest('input, textarea')) {
+          e.preventDefault();
+        }
+      }
+      lastTouchEnd = now;
+    }, false);
+
+    /* =========================================================================
+       2. LIVE AI ENGINE & STREAMING LOGIC
+       ========================================================================= */
     const MODEL_NAME = "models/gemini-3.1-flash-live-preview";
     
     let ws = null;
@@ -404,9 +473,9 @@
     let playAudioContext = null;
     let mediaStreamDest = null;
     
-    // Smooth Jitter Buffer audio tracking
+    // Anti-Jitter Buffer Setup
     let nextStartTime = 0;
-    const JITTER_BUFFER_SEC = 0.10; // 100ms safety lookahead buffer
+    const JITTER_BUFFER_SEC = 0.10;
     let activeAudioSources = [];
 
     let isUserStopping = false;
@@ -440,7 +509,7 @@
           });
         }
       } catch (err) {
-        log("Wake Lock request failed: " + err.message);
+        log("Wake Lock error: " + err.message);
       }
     }
 
@@ -477,20 +546,15 @@
 
     document.addEventListener("visibilitychange", async () => {
       if (document.visibilityState === "visible") {
-        log("App focused / Screen ON.");
-        
         if (ws && ws.readyState === WebSocket.OPEN && wakeLock === null) {
           requestWakeLock();
         }
-
         if (playAudioContext && playAudioContext.state === "suspended") {
           await playAudioContext.resume();
         }
-
         if (micAudioContext && micAudioContext.state === "suspended") {
           await micAudioContext.resume();
         }
-
         if ((!ws || ws.readyState === WebSocket.CLOSED) && !isUserStopping) {
           const apiKey = localStorage.getItem("GEMINI_LIVE_KEY");
           if (apiKey) {
@@ -576,7 +640,6 @@
       });
 
       content.innerHTML = html;
-
       setTimeout(() => {
         if (codePanel) codePanel.scrollTop = codePanel.scrollHeight;
       }, 50);
@@ -760,7 +823,7 @@
       const fps = parseInt(document.getElementById("fpsSelect").value) || 1;
       const intervalMs = Math.round(1000 / fps);
       imageInterval = setInterval(sendVideoFrame, intervalMs);
-      log(`Video stream set to ${fps} FPS (${intervalMs}ms interval).`);
+      log(`Video stream set to ${fps} FPS.`);
     }
 
     document.getElementById("fpsSelect").onchange = () => {
@@ -847,7 +910,6 @@
           isCameraActive = false;
         }
 
-        // Initialize AudioContext using native hardware sample rate to eliminate crackles
         playAudioContext = new (window.AudioContext || window.webkitAudioContext)();
         if (playAudioContext.state === "suspended") {
           await playAudioContext.resume();
@@ -937,7 +999,6 @@
           }
         };
         ws.send(JSON.stringify(setupMsg));
-        log(`Setup handshake sent (Voice: ${selectedVoice}, Persona: ${aiName}).`);
 
         if (isCameraActive) {
           startVideoInterval();
@@ -949,11 +1010,9 @@
 
         setTimeout(() => {
           if (isReconnecting) {
-            log(`Asking ${aiName} to seamlessly resume conversation...`);
             sendTextMessageDirect("Session auto-reconnected. Resume our conversation seamlessly from where we left off!");
             isReconnecting = false;
           } else {
-            log(`Asking ${aiName} to greet you...`);
             sendTextMessageDirect(`Hey ${aiName}! Say hello to me casually and let me know you're ready!`);
           }
         }, 600);
@@ -973,12 +1032,12 @@
       };
 
       ws.onclose = (e) => {
-        log(`WebSocket Closed (Code: ${e.code}, Reason: ${e.reason || "None"})`);
+        log(`WebSocket Closed (Code: ${e.code})`);
         
         const isExpired = e.code === 1008 || (e.reason && (e.reason.includes("GoAway") || e.reason.includes("session durat")));
         if (isExpired && !isUserStopping) {
           isReconnecting = true;
-          log("⚡ Gemini session limit reached. Auto-reconnecting while preserving memory...");
+          log("⚡ Auto-reconnecting while preserving memory...");
           setTimeout(() => {
             connectWebSocket(apiKey);
           }, 1000);
@@ -990,7 +1049,7 @@
         }
       };
 
-      ws.onerror = (err) => {
+      ws.onerror = () => {
         log("WebSocket Error encountered.");
       };
     }
@@ -1175,7 +1234,6 @@
         return;
       }
 
-      // If user interrupted the model, clear pending queued audio
       if (response.serverContent?.interrupted) {
         log("Interruption detected, clearing audio queue.");
         clearAudioQueue();
@@ -1229,7 +1287,6 @@
       }
     }
 
-    // High-performance, anti-jitter audio chunk playback
     function playAudioChunk(base64Data) {
       if (!playAudioContext) return;
 
@@ -1237,7 +1294,6 @@
         playAudioContext.resume();
       }
 
-      // Decode base64 to 16-bit PCM Float32Array
       const binaryString = atob(base64Data);
       const len = binaryString.length;
       const bytes = new Uint8Array(len);
@@ -1251,7 +1307,6 @@
         float32Array[i] = int16Array[i] / 32768.0;
       }
 
-      // Gemini Live uses 24000Hz PCM
       const buffer = playAudioContext.createBuffer(1, float32Array.length, 24000);
       buffer.getChannelData(0).set(float32Array);
 
@@ -1266,7 +1321,6 @@
 
       const currentTime = playAudioContext.currentTime;
 
-      // Jitter Buffer: If audio runs dry or starting a fresh turn, schedule with 100ms lookahead
       if (nextStartTime < currentTime) {
         nextStartTime = currentTime + JITTER_BUFFER_SEC;
       }
