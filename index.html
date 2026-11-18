@@ -332,7 +332,7 @@
 
       <select id="voiceSelect" style="width: 95px; flex-shrink: 0;">
         <option value="Puck" selected>👦 MAX (M)</option>
-        <option value="Gacrux">👧 AVA (F)</option>
+        <option value="Despina">👧 AVA (F)</option>
       </select>
     </div>
 
@@ -401,22 +401,22 @@
     let video = document.getElementById("webcam");
     let imageInterval = null;
 
-    // Single shared AudioContext for low-latency capture + playback
     let audioContext = null;
     let micSourceNode = null;
     let micCaptureNode = null;
     let micMuteGain = null;
     let micSetupPromise = null;
 
-    // Per-turn GainNode allows smooth 25ms fade-out on barge-in without blocking new turns
     let currentTurnGain = null;
     let activeAudioSources = [];
     let nextStartTime = 0;
 
+    let isSetupComplete = false;
     let isUserStopping = false;
     let isReconnecting = false;
     let wakeLock = null;
 
+    let currentUserTranscript = "";
     let currentTurnText = "";
     let conversationHistory = [];
     let detectedCodeBlocks = [];
@@ -444,13 +444,11 @@
       return currentTurnGain;
     }
 
-    // Smoothly fade out ongoing AI audio on interruption without clicking or delaying the next turn
     function stopAndClearAudioQueue() {
       if (audioContext && currentTurnGain) {
         const fadingGain = currentTurnGain;
         const sourcesToStop = activeAudioSources;
 
-        // Immediately prepare a clean GainNode for any upcoming AI response
         currentTurnGain = audioContext.createGain();
         currentTurnGain.gain.value = 1.0;
         currentTurnGain.connect(audioContext.destination);
@@ -538,6 +536,13 @@
         conversationHistory.shift();
       }
       renderHistoryPanel();
+    }
+
+    function flushUserTranscript() {
+      if (currentUserTranscript.trim().length > 0) {
+        recordHistory("User (Voice)", currentUserTranscript.trim());
+        currentUserTranscript = "";
+      }
     }
 
     function extractAndStoreCode(text) {
@@ -837,6 +842,8 @@
       isReconnecting = false;
       conversationHistory = [];
       detectedCodeBlocks = [];
+      currentUserTranscript = "";
+      currentTurnText = "";
       renderHistoryPanel();
       renderCodePanel();
 
@@ -888,18 +895,22 @@
     };
 
     function connectWebSocket(apiKey) {
+      isSetupComplete = false;
+      currentUserTranscript = "";
+      currentTurnText = "";
+
       const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
       log(`Connecting to WebSocket (${MODEL_NAME})...`);
 
       ws = new WebSocket(wsUrl);
 
       ws.onopen = async () => {
-        log("WebSocket Connected!");
+        log("WebSocket Connected! Sending setup...");
 
         const selectedVoice = document.getElementById("voiceSelect").value;
-        const aiName = selectedVoice === "Gacrux" ? "AVA" : "MAX";
+        const aiName = selectedVoice === "Puck" ? "MAX" : "AVA";
 
-        document.getElementById("status").innerText = `Status: ${aiName} Active`;
+        document.getElementById("status").innerText = `Status: Connecting ${aiName}...`;
         document.getElementById("startBtn").disabled = true;
         document.getElementById("stopBtn").disabled = false;
         document.getElementById("voiceSelect").disabled = true;
@@ -920,6 +931,7 @@
           setup: {
             model: MODEL_NAME,
             generationConfig: {
+              temperature: 0.4,
               responseModalities: ["AUDIO"],
               speechConfig: {
                 voiceConfig: {
@@ -960,22 +972,9 @@
         };
         ws.send(JSON.stringify(setupMsg));
 
-        if (isCameraActive) {
-          startVideoInterval();
-        }
-
         if (!micCaptureNode && audioStream) {
           await setupMicStream(audioStream);
         }
-
-        setTimeout(() => {
-          if (isReconnecting) {
-            sendTextMessageDirect("Session auto-reconnected. Resume our conversation seamlessly from where we left off!");
-            isReconnecting = false;
-          } else {
-            sendTextMessageDirect(`Hey ${aiName}! Say hello to me casually and let me know you're ready!`);
-          }
-        }, 600);
       };
 
       ws.onmessage = async (event) => {
@@ -992,6 +991,7 @@
       };
 
       ws.onclose = (e) => {
+        isSetupComplete = false;
         const isExpired = e.code === 1008 || (e.reason && (e.reason.includes("GoAway") || e.reason.includes("session durat")));
         if (isExpired && !isUserStopping) {
           isReconnecting = true;
@@ -1022,8 +1022,9 @@
     document.getElementById("sendBtn").onclick = () => {
       const msgInput = document.getElementById("userMsg");
       const text = msgInput.value.trim();
-      if (text) {
+      if (text && isSetupComplete) {
         stopAndClearAudioQueue();
+        flushUserTranscript();
         log(`You typed: ${text}`);
         recordHistory("User", text);
         sendTextMessageDirect(text);
@@ -1035,8 +1036,9 @@
       if (e.key === "Enter") {
         const msgInput = document.getElementById("userMsg");
         const text = msgInput.value.trim();
-        if (text) {
+        if (text && isSetupComplete) {
           stopAndClearAudioQueue();
+          flushUserTranscript();
           log(`You typed: ${text}`);
           recordHistory("User", text);
           sendTextMessageDirect(text);
@@ -1046,14 +1048,14 @@
     };
 
     function sendTextMessageDirect(promptText) {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !isSetupComplete) return;
       ws.send(JSON.stringify({
         realtimeInput: { text: promptText }
       }));
     }
 
     function sendVideoFrame() {
-      if (!ws || ws.readyState !== WebSocket.OPEN || !isCameraActive) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !isCameraActive || !isSetupComplete) return;
 
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
@@ -1071,7 +1073,7 @@
     }
 
     function processMicSamples(rawData) {
-      if (!ws || ws.readyState !== WebSocket.OPEN || !audioContext) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !audioContext || !isSetupComplete) return;
 
       let sum = 0;
       for (let i = 0; i < rawData.length; i++) {
@@ -1129,7 +1131,6 @@
 
         micSourceNode = audioContext.createMediaStreamSource(mediaStream);
 
-        // Prefer AudioWorklet for low-latency off-main-thread capture (~21ms chunks at 48kHz)
         if (audioContext.audioWorklet) {
           try {
             const workletCode = `
@@ -1170,7 +1171,6 @@
           }
         }
 
-        // Fallback to ScriptProcessorNode routed through a muted GainNode
         const processor = audioContext.createScriptProcessor(2048, 1, 1);
         processor.onaudioprocess = (e) => {
           processMicSamples(e.inputBuffer.getChannelData(0));
@@ -1188,7 +1188,6 @@
       return micSetupPromise;
     }
 
-    // Box-averaged downsampling prevents high-frequency aliasing for cleaner server VAD
     function downsampleTo16k(inputBuffer, sampleRate) {
       if (sampleRate === 16000) return inputBuffer;
       const ratio = sampleRate / 16000;
@@ -1236,10 +1235,23 @@
 
     function handleServerResponse(response) {
       const selectedVoice = document.getElementById("voiceSelect").value;
-      const currentName = selectedVoice === "Gacrux" ? "AVA" : "MAX";
+      const currentName = selectedVoice === "Puck" ? "MAX" : "AVA";
 
       if (response.setupComplete) {
-        log(`${currentName} Active & Ready!`);
+        isSetupComplete = true;
+        document.getElementById("status").innerText = `Status: ${currentName} Active`;
+        log(`${currentName} Active & Ready (${selectedVoice})!`);
+
+        if (isCameraActive) {
+          startVideoInterval();
+        }
+
+        if (isReconnecting) {
+          sendTextMessageDirect("Session auto-reconnected. Resume our conversation seamlessly from where we left off!");
+          isReconnecting = false;
+        } else {
+          sendTextMessageDirect(`Hey ${currentName}! Say hello to me casually and let me know you're ready!`);
+        }
         return;
       }
 
@@ -1257,13 +1269,14 @@
 
       const userTranscript = response.serverContent?.inputAudioTranscription?.text || response.serverContent?.inputTranscription?.text;
       if (userTranscript) {
-        recordHistory("User (Voice)", userTranscript);
+        currentUserTranscript += userTranscript;
       }
 
       const aiText = response.serverContent?.outputAudioTranscription?.text ||
                      response.serverContent?.outputTranscription?.text;
 
       if (aiText) {
+        flushUserTranscript();
         currentTurnText += aiText;
         if (aiText.includes("```")) {
           extractAndStoreCode(currentTurnText);
@@ -1272,6 +1285,7 @@
 
       const parts = response.serverContent?.modelTurn?.parts;
       if (parts) {
+        flushUserTranscript();
         for (const part of parts) {
           if (part.functionCall) {
             handleFunctionCall(part.functionCall.name, part.functionCall.id);
@@ -1289,6 +1303,7 @@
       }
 
       if (response.serverContent?.turnComplete) {
+        flushUserTranscript();
         if (currentTurnText.trim().length > 0) {
           recordHistory(currentName, currentTurnText);
           extractAndStoreCode(currentTurnText);
@@ -1328,7 +1343,6 @@
 
       const currentTime = audioContext.currentTime;
       if (nextStartTime < currentTime) {
-        // Larger lead only on the first chunk of a turn; tighter recovery mid-turn
         const lead = activeAudioSources.length === 0 ? 0.05 : 0.015;
         nextStartTime = currentTime + lead;
       }
@@ -1346,6 +1360,9 @@
     }
 
     function stopInspection() {
+      isSetupComplete = false;
+      currentUserTranscript = "";
+      currentTurnText = "";
       stopTimer();
       stopCameraFeed();
       releaseWakeLock();
